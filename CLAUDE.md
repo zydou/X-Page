@@ -70,6 +70,12 @@ The entire application is a single file. Key functions in execution order:
 API calls use `User-Agent: TelegramBot (like TwitterBot)` and a 3000ms
 `AbortSignal.timeout`.
 
+**Caching strategy** — both the fxtwitter API fetch and the `/proxy/`
+media fetch set `cf: { cacheTtl: 31556952 (1 year), cacheEverything: true }`.
+Tweet IDs are immutable (edits get a new ID), so a 1-year edge cache is
+safe. The proxy cache key is the full encoded URL; the API cache key is
+the full URL including `?lang=`, so different languages don't collide.
+
 ## Configuration
 
 **`wrangler.toml`** — Worker entry point and Text module rules for CSS

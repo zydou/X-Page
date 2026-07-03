@@ -53,11 +53,11 @@ async function handleProxy(request) {
   if (range) headers.range = range;
 
   // 不设 signal 超时：大视频回源慢，让平台自身的请求超时兜底（约 100s）。
-  // 不启用 cacheEverything：>512MB 的文件无法被 CDN 边缘缓存，显式开启反而干扰流式传输。
   const upstream = await fetch(target, {
     headers,
     cf: {
-      cacheTtl: 86400,
+      cacheTtl: 31556952, // 1 年
+      cacheEverything: true,
     },
   });
   if (!upstream.ok || !upstream.body) {
@@ -334,6 +334,7 @@ async function publish(rawPath, cfg) {
   const resp = await fetch(apiUrl, {
     headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
     signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    cf: { cacheTtl: 31556952, cacheEverything: true }, // 缓存 1 年，按完整 URL（含 ?lang=）作键
   });
   if (!resp.ok) throw new Error(`fxtwitter API ${resp.status}`);
   const data = await resp.json();
