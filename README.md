@@ -7,10 +7,10 @@
 - 支持推文和 Thread（串推）的完整渲染
 - 支持 Twitter Article（长文章，含标题、引用、列表、代码块、粗体/斜体等）
 - 自动展开推文中的链接
-- 支持图片画廊和视频渲染，带横屏检测
+- 支持图片画廊和视频渲染，带横屏检测、视频懒缓冲
 - 支持引用推文（Quote Tweet）及其文章预览
 - 可选翻译目标语言
-- 可选媒体代理，用于无法直连访问 Twitter 的地区
+- 内置媒体代理：Worker 服务端拉取原始图片/视频流式转发给浏览器，无需任何外部代理即可在无法直连 Twitter 的地区使用
 
 ## 使用方法
 
@@ -45,7 +45,6 @@ https://your-domain.com/2072464558732824680
 | --- | --- | --- |
 | `TIMEZONE` | `Asia/Shanghai` | IANA 时区，用于日期显示 |
 | `TRANSLATE_TO` | `zh-cn` | 翻译目标语言（BCP-47），留空则返回原文 |
-| `PROXY_BASE` | _(无)_ | 可选的媒体代理前缀，用于无法直连 Twitter 时（可基于 [netnr/workers](https://github.com/netnr/workers) 自行部署） |
 
 ### 本地部署
 

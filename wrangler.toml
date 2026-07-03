@@ -9,6 +9,3 @@ rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
 [vars]
 TIMEZONE = "Asia/Shanghai"
 TRANSLATE_TO = "zh-cn"
-# （可选）代理基础 URL，用于代理图片和视频，用于无法直连访问 Twitter 时使用
-# 可基于此项目自行部署：https://github.com/netnr/workers
-# PROXY_BASE= "https://seep.eu.org/"

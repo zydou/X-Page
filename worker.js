@@ -4,6 +4,7 @@
  * 路由（均解析出相同 HTML）
  *   /{username}/status/1794805688696275131
  *   /1794805688696275131
+ *   /proxy/<encoded-url>   内部媒体代理，绕过封锁
  *
  */
 
@@ -18,13 +19,74 @@ const API_TIMEOUT_MS = 3000;
 // 环境变量（wrangler.toml 的 [vars] 节；运行时通过 import.meta.env 读取）
 //
 //   TIMEZONE        IANA 时区，默认 "UTC"（API 返回的时间戳就是 UTC，默认直接显示）
-//   PROXY_BASE      用于代理图片和视频的前缀 或空串；空串表示不使用代理，直接返回原始链接
 //   TRANSLATE_TO    翻译目标语言（BCP-47），例如 "zh-cn"；空串去掉 ?lang=，返回原文
 // ---------------------------------------------------------------------------
 
-/** 媒体 URL 代理。PROXY_BASE 未配置则直接返回原始 URL（不编码）。 */
-function proxyUrl(url, proxyBase) {
-  return proxyBase ? proxyBase + encodeURIComponent(url) : url;
+/** 把任意 https URL 转换为内部代理路径，让浏览器通过本 Worker 拉取媒体。 */
+function proxyUrl(targetUrl) {
+  return `/proxy/` + encodeURIComponent(targetUrl);
+}
+
+/**
+ * 媒体代理：从路径中取回原始 URL，fetch 并流式返回。
+ * 路径格式：/proxy/<encodeURIComponent(originalUrl)>
+ * Cloudflare Workers 作为普通的 HTTPS 客户端发出请求，不受地区封锁限制。
+ */
+async function handleProxy(request) {
+  const url = new URL(request.url);
+  // pathname = "/proxy/<encoded>" → 取 "/proxy/" 之后的部分再 decode
+  const encoded = url.pathname.slice("/proxy/".length);
+  if (!encoded) return new Response("missing url", { status: 400 });
+  let target;
+  try {
+    target = decodeURIComponent(encoded);
+  } catch {
+    return new Response("bad encoding", { status: 400 });
+  }
+  if (!/^https?:\/\//i.test(target)) {
+    return new Response("only http(s) urls are allowed", { status: 400 });
+  }
+
+  // 透传 Range 请求，视频拖拽播放必需
+  const headers = {};
+  const range = request.headers.get("range");
+  if (range) headers.range = range;
+
+  // 不设 signal 超时：大视频回源慢，让平台自身的请求超时兜底（约 100s）。
+  // 不启用 cacheEverything：>512MB 的文件无法被 CDN 边缘缓存，显式开启反而干扰流式传输。
+  const upstream = await fetch(target, {
+    headers,
+    cf: {
+      cacheTtl: 86400,
+    },
+  });
+  if (!upstream.ok || !upstream.body) {
+    return new Response("upstream " + upstream.status, { status: upstream.status });
+  }
+
+  // 构建响应，保留原始 Content-Type / Content-Length / Content-Range
+  const out = new Headers();
+  const passThrough = [
+    "content-type",
+    "content-length",
+    "content-range",
+    "accept-ranges",
+    "etag",
+    "last-modified",
+    "cache-control",
+  ];
+  for (const k of passThrough) {
+    const v = upstream.headers.get(k);
+    if (v) out.set(k, v);
+  }
+  if (!out.has("cache-control")) out.set("cache-control", "public, max-age=86400");
+  // CORS 放宽，让 HTML 内 <img>/<video> 跨子域也能正常呈现
+  out.set("access-control-allow-origin", "*");
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: out,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -103,16 +165,16 @@ function parseMedia(mediaList) {
   return media;
 }
 
-function buildMediaTag(mediaAll, proxyBase) {
+function buildMediaTag(mediaAll) {
   let tag = '<div class="media-gallery">';
   for (const item of parseMedia(mediaAll || [])) {
     const landscape = item.width > item.height;
     if (item.type === "video") {
       const cls = landscape ? "tweet-media landscape" : "tweet-media";
-      tag += `<video src="${proxyUrl(item.url, proxyBase)}" controls class="${cls}"></video>`;
+      tag += `<video src="${proxyUrl(item.url)}" controls class="${cls}"></video>`;
     } else if (item.type === "image") {
       const landscapeClass = landscape ? ' class="landscape"' : "";
-      tag += `<a href="${proxyUrl(item.url, proxyBase)}" target="_blank"${landscapeClass}><img src="${proxyUrl(item.url, proxyBase)}" class="tweet-media"></a>`;
+      tag += `<a href="${proxyUrl(item.url)}" target="_blank"${landscapeClass}><img src="${proxyUrl(item.url)}" loading="lazy" class="tweet-media"></a>`;
     }
   }
   tag += "</div>";
@@ -123,7 +185,7 @@ function buildMediaTag(mediaAll, proxyBase) {
 // Twitter Article
 // ---------------------------------------------------------------------------
 
-function parseArticle(article, tweetUrl, proxyBase) {
+function parseArticle(article, tweetUrl) {
   function inlineStyle(text, styles) {
     if (typeof text !== "string" || !text.trim()) return "";
     styles = styles || [];
@@ -159,7 +221,7 @@ function parseArticle(article, tweetUrl, proxyBase) {
 
   let html = "";
   const coverUrl = article?.cover_media?.media_info?.original_img_url ?? "";
-  if (coverUrl) html += `\n<img src="${proxyUrl(coverUrl, proxyBase)}" alt="Cover" />`;
+  if (coverUrl) html += `\n<img src="${proxyUrl(coverUrl)}" loading="lazy" />`;
 
   // 收集 article 内的媒体
   const mediaList = [];
@@ -196,10 +258,10 @@ function parseArticle(article, tweetUrl, proxyBase) {
         const mediaId = entity?.data?.mediaItems?.[0]?.mediaId ?? "";
         const photo = mediaList.find((m) => m.type === "photo" && m.media_id === mediaId);
         if (photo) {
-          texts += `\n<img src="${proxyUrl(photo.url, proxyBase)}" alt="IMG-${mediaId}" />`;
+          texts += `\n<img src="${proxyUrl(photo.url)}" loading="lazy" />`;
         } else {
           const vid = mediaList.find((m) => m.type === "video" && m.media_id === mediaId);
-          if (vid) texts += `\n<video src="${proxyUrl(vid.url, proxyBase)}" controls class="tweet-media"></video>`;
+          if (vid) texts += `\n<video src="${proxyUrl(vid.url)}" controls class="tweet-media"></video>`;
         }
       } else if (eType === "DIVIDER") {
         texts += "\n";
@@ -262,7 +324,7 @@ function parseArticle(article, tweetUrl, proxyBase) {
 // ---------------------------------------------------------------------------
 
 async function publish(rawPath, cfg) {
-  const { proxyBase, lang, tz } = cfg;
+  const { lang, tz } = cfg;
   const pid = extractPid(rawPath);
   if (!pid) return "";
 
@@ -285,18 +347,18 @@ async function publish(rawPath, cfg) {
     const author = post?.author?.name ?? "Anonymous";
     const tweetUrl = post?.url ?? rawPath;
     const dateStr = formatDate(post.created_timestamp, tz);
-    const avatarUrl = proxyUrl(post?.author?.avatar_url ?? "", proxyBase);
+    const avatarUrl = proxyUrl(post?.author?.avatar_url ?? "");
     const text = (post?.html_no_media ?? post?.translation?.text ?? post?.text ?? "").replace(/\n/g, "<br>");
     fullHtml += `<hr>${authorTag(author, tweetUrl, dateStr, avatarUrl)}<p>${makeUrlClickable(text)}</p>`;
-    if (post.article) fullHtml += parseArticle(post.article, tweetUrl, proxyBase);
-    fullHtml += buildMediaTag(post?.media?.all ?? [], proxyBase);
+    if (post.article) fullHtml += parseArticle(post.article, tweetUrl);
+    fullHtml += buildMediaTag(post?.media?.all ?? []);
 
     if (post.quote) {
       const q = post.quote;
       const qAuthor = q?.author?.name ?? "Anonymous";
       const qUrl = q?.url ?? rawPath;
       const qText = (q?.translation?.text ?? q?.text ?? "").replace(/\n/g, "<br>");
-      const qAvatar = proxyUrl(q?.author?.avatar_url ?? "", proxyBase);
+      const qAvatar = proxyUrl(q?.author?.avatar_url ?? "");
       const qDate = formatDate(q.created_timestamp, tz);
       fullHtml += `${authorTag(qAuthor, qUrl, qDate, qAvatar)}<p>${makeUrlClickable(qText)}</p>`;
       if (q.article) {
@@ -305,7 +367,7 @@ async function publish(rawPath, cfg) {
         fullHtml += `<a href="${qUrl}" target="_blank"><h3>《${title}》</h3></a>`;
         fullHtml += `<blockquote>${preview}</blockquote>`;
       }
-      fullHtml += buildMediaTag(q?.media?.all ?? [], proxyBase);
+      fullHtml += buildMediaTag(q?.media?.all ?? []);
     }
   }
 
@@ -376,9 +438,13 @@ export default {
       });
     }
 
+    // 媒体代理路由：/proxy/<encodeURIComponent(url)>
+    if (path === "proxy" || path.startsWith("proxy/")) {
+      return handleProxy(request);
+    }
+
     const cfg = {
       tz: (env && env.TIMEZONE) || "UTC",
-      proxyBase: (env && env.PROXY_BASE) || "",
       lang: (env && env.TRANSLATE_TO) || "",
     };
 
