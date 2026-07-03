@@ -1,0 +1,87 @@
+/* 推文头部容器，使用 Flexbox 实现左右布局 */
+.tweet-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+/* 头像样式：固定大小、圆形、右侧留白 */
+.tweet-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    margin-right: 12px;
+    object-fit: cover;
+}
+
+/* 右侧信息容器：使用垂直 Flexbox 实现上下两行 */
+.tweet-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.4;
+}
+
+/* 作者名字样式 */
+.tweet-author {
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+/* 时间戳样式 */
+.tweet-time, .tweet-time a {
+    font-size: 0.9em;
+    color: #777; /* 灰色次要文本 */
+    text-decoration: none;
+}
+
+/* 媒体容器：使用 Grid 实现最多两列布局 */
+.media-gallery {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* 媒体内容样式 */
+.tweet-media {
+    width: 100%;
+    height: 80vh;
+    object-fit: contain;
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    display: block;
+}
+
+/* 如果媒体被 a 标签包裹，确保 a 标签作为网格项能占满空间 */
+.media-gallery > a {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* 单图/单视频的结构处理：让网格内唯一的直接子元素跨越两列 */
+.media-gallery > *:only-child {
+    grid-column: span 2;
+}
+
+/* 横屏媒体（宽>高）独占一行跨越两列，竖屏/正方形并排显示 */
+.media-gallery > .landscape {
+    grid-column: span 2;
+}
+
+/* 针对单图/单视频重置高度和背景色 */
+.media-gallery > *:only-child .tweet-media,
+.media-gallery > .tweet-media:only-child {
+    height: auto;
+    max-height: 80vh;
+    background-color: transparent;
+}
+
+/* 横屏媒体按原始比例显示，去掉上下边框 */
+.media-gallery > .landscape .tweet-media,
+.media-gallery > .landscape.tweet-media {
+    height: auto;
+    max-height: 80vh;
+    background-color: transparent;
+}

@@ -1,0 +1,29 @@
+---
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/deploy.yaml
+      - worker.js
+      - twitter.css
+      - wrangler.toml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - uses: actions/checkout@main
+
+      - name: Fetch water.css
+        run: curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.css -o water.css
+
+      - name: Compress CSS
+        run: npx esbuild *.css --minify --outdir=. --allow-overwrite
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
