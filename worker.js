@@ -457,7 +457,7 @@ export default {
       return new Response(html, {
         headers: {
           "content-type": "text/html; charset=utf-8",
-          "cache-control": "public, max-age=300",
+          "cache-control": "public, max-age=31556952",
         },
       });
     } catch (e) {
