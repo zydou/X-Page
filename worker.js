@@ -64,6 +64,8 @@ async function handleProxy(request) {
   }
 
   // 构建响应，保留原始 Content-Type / Content-Length / Content-Range
+  // cache-control 不放透传：强制写死 1 年 + immutable。这些 URL 基于
+  // hash、永不改变，浏览器在有效期内连条件请求（If-None-Match）都不发。
   const out = new Headers();
   const passThrough = [
     "content-type",
@@ -72,13 +74,12 @@ async function handleProxy(request) {
     "accept-ranges",
     "etag",
     "last-modified",
-    "cache-control",
   ];
   for (const k of passThrough) {
     const v = upstream.headers.get(k);
     if (v) out.set(k, v);
   }
-  if (!out.has("cache-control")) out.set("cache-control", "public, max-age=86400");
+  out.set("cache-control", "public, max-age=31556952, immutable");
   // CORS 放宽，让 HTML 内 <img>/<video> 跨子域也能正常呈现
   out.set("access-control-allow-origin", "*");
 
