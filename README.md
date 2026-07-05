@@ -14,18 +14,16 @@
 
 ## 使用方法
 
-部署后，访问以下两种等价的 URL 格式：
+部署后，访问 URL 格式：
 
 ```txt
 https://your-domain.com/{username}/status/{tweet_id}
-https://your-domain.com/{tweet_id}
 ```
 
 例如：
 
 ```txt
 https://your-domain.com/SpaceX/status/2072464558732824680
-https://your-domain.com/2072464558732824680
 ```
 
 根路径 `/` 会返回使用说明页面。

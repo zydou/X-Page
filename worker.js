@@ -1,9 +1,8 @@
 /**
  * Cloudflare Worker: 把 X/Twitter 推文（含 thread / Article）转换为自包含 HTML。
  *
- * 路由（均解析出相同 HTML）
+ * 路由
  *   /{username}/status/1794805688696275131
- *   /1794805688696275131
  *   /proxy/<encoded-url>   内部媒体代理，绕过封锁
  *
  */
@@ -93,16 +92,11 @@ async function handleProxy(request) {
 // 路由解析
 // ---------------------------------------------------------------------------
 
-/** 从请求路径中提取推文 ID */
+/** 从请求路径中提取推文 ID，仅支持 username/status/id 形式 */
 function extractPid(raw) {
   const s = (raw || "").trim();
-  // 1. 短格式: /username/status/id
-  let m = s.match(/^(\w+)\/status\/(\d+)$/);
-  if (m) return m[2];
-  // 2. 纯 ID
-  m = s.match(/^(\d+)$/);
-  if (m) return m[1];
-  return null;
+  const m = s.match(/^(\w+)\/status\/(\d+)$/);
+  return m ? m[2] : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -396,26 +390,16 @@ function wrapHtml(fullHtml, thisAuthor) {
 function indexHtml(host) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>X → HTML</title></head><body style="font-family:sans-serif;max-width:640px;margin:40px auto;padding:0 16px">
 <h2>将 X/Twitter 推文转换为HTML</h2>
-<p>支持以下两种格式（等价）：</p>
-<ul>
-    <li>https://${host}/\${username}/status/\${post_id}</li>
-    <li>https://${host}/\${post_id}</li>
-</ul>
+<p>格式：https://${host}/\${username}/status/\${post_id}</p>
 <h4>示例</h4>
 <p>原始：<a href="https://x.com/SpaceX/status/2072464558732824680">https://<mark>x.com</mark>/SpaceX/status/2072464558732824680</a></p>
 <p>转换：<a href="https://${host}/SpaceX/status/2072464558732824680">https://<mark>${host}</mark>/SpaceX/status/2072464558732824680</a></p>
-<p>或者：<a href="https://${host}/2072464558732824680">https://<mark>${host}</mark>/<del>SpaceX/status/</del>2072464558732824680</a></p>
 <hr>
 <h2>Convert X/Twitter to HTML</h2>
-<p>Supports the following two formats (equivalent):</p>
-<ul>
-    <li>https://${host}/\${username}/status/\${post_id}</li>
-    <li>https://${host}/\${post_id}</li>
-</ul>
+<p>Format: https://${host}/\${username}/status/\${post_id}</p>
 <h4>Example</h4>
 <p>Original: <a href="https://x.com/SpaceX/status/2072464558732824680">https://<mark>x.com</mark>/SpaceX/status/2072464558732824680</a></p>
 <p>Converted: <a href="https://${host}/SpaceX/status/2072464558732824680">https://<mark>${host}</mark>/SpaceX/status/2072464558732824680</a></p>
-<p>Or: <a href="https://${host}/2072464558732824680">https://<mark>${host}</mark>/<del>SpaceX/status/</del>2072464558732824680</a></p>
 </body></html>`;
 }
 

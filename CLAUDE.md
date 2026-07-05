@@ -27,7 +27,6 @@ JavaScript.
 All routes live in the single `fetch` handler in `worker.js`:
 
 - `/{username}/status/{tweet_id}` — canonical tweet URL format
-- `/{tweet_id}` — bare tweet ID
 - `/proxy/<encodeURIComponent(url)>` — **internal media proxy**: fetches
   the original resource server-side (bypassing regional blocks) and streams
   it to the browser. Supports `Range` requests for video seeking. All
@@ -36,9 +35,8 @@ All routes live in the single `fetch` handler in `worker.js`:
 - `/` and `/favicon.ico` — returns a bilingual (CN/EN) usage page
   (`indexHtml`)
 
-The tweet ID is extracted by `extractPid()`, which tries the `/status/`
-pattern first, then falls back to a bare numeric ID. The `/proxy/` route is
-checked before `extractPid`.
+The tweet ID is extracted by `extractPid()`. The `/proxy/` route is checked
+before `extractPid`.
 
 ## Architecture (`worker.js`, ~470 lines)
 
