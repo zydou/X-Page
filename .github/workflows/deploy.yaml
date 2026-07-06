@@ -17,11 +17,22 @@ jobs:
     steps:
       - uses: actions/checkout@main
 
-      - name: Fetch water.css
-        run: curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.css -o water.css
+      - name: Fetch & Minify CSS
+        run: |
+          curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css -o water.css
+          npx esbuild *.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
 
-      - name: Compress CSS
-        run: npx esbuild *.css --minify --outdir=. --allow-overwrite
+      # 拉取 artplayer.js 并包装为 ES Module（export default 字符串）。
+      # 用 JSON.stringify 转义能安全处理源码里出现的反引号 / 反斜杠。
+      - name: Wrap artplayer.js as ES module
+        run: |
+          curl -fsSL https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js -o artplayer.js
+          node -e '
+          const fs = require("fs");
+          const src = fs.readFileSync("artplayer.js", "utf8");
+          fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n");
+          console.log(`✓ artplayer.mjs generated (${src.length} bytes)`);
+          '
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v4

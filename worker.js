@@ -1,36 +1,43 @@
 /**
- * Cloudflare Worker: 把 X/Twitter 推文（含 thread / Article）转换为自包含 HTML。
+ * Unified service Worker: Twitter-to-HTML, video proxy, image proxy, and generic media proxy behind one hostname.
  *
- * 路由
- *   /{username}/status/1794805688696275131
- *   /proxy/<encoded-url>   内部媒体代理，绕过封锁
+ * 路由：
+ *   /vid/<encodeURIComponent(url)>          内部视频代理 → Artplayer HTML
+ *   /vid/d/<encodeURIComponent(url)>        直连视频，不经过代理
+ *   /img/<encodeURIComponent(url)>          内部图片代理 → 自适应 HTML
+ *   /img/d/<encodeURIComponent(url)>        直连图片，不经过代理
+ *   /proxy/<encodeURIComponent(url)>        通用媒体代理（透传 + 长缓存）
+ *   /<username>/status/<tweet_id>           X/Twitter 推文 → 自包含 HTML
+ *   /                                      使用说明页
  *
+ * 所有渲染出的 HTML 均完全自包含（无外部 <link>/<script>）：
+ *   - Third-party JS (Artplayer) is fetched by CI as artplayer.js, serialized via JSON.stringify
+ *     into a `export default "..."` ES module (artplayer.mjs), and inlined as a string value.
+ *   - water.css / twitter.css 通过 Wrangler Text module rule 以字符串导入。
  */
-
-// 站点样式表：通过 wrangler Text module rule 作为字符串导入（见 wrangler.toml 的 rules），
-// 内联进 <style>，彻底去掉外部 <link>，做到 HTML 自包含、不受混合内容拦截。
-// water.css 在 GitHub Actions 中被下载到本地 (.github/workflows/deploy.yaml)
+// 内联CSS：通过 wrangler Text module rule 作为字符串导入（见 wrangler.toml 的 rules）。
+// 内联JS：CI 通过 JSON.stringify 把 artplayer.js 源码打包成 artplayer.mjs 的 export default 字符串，
+// Wrangler 以 ESM 形式导入后直接在模板字符串里做值替换。
+// 最终拼出的 HTML 完全自包含，无外部 <link>/<script> 引用。
+import ARTPLAYER_JS from "./artplayer.mjs";
 import WATER_CSS from "./water.css";
 import TWITTER_CSS from "./twitter.css";
 const API_TIMEOUT_MS = 3000;
 
 // ---------------------------------------------------------------------------
-// 环境变量（wrangler.toml 的 [vars] 节；运行时通过 import.meta.env 读取）
-//
-//   TIMEZONE        IANA 时区，默认 "UTC"（API 返回的时间戳就是 UTC，默认直接显示）
-//   TRANSLATE_TO    翻译目标语言（BCP-47），例如 "zh-cn"；空串去掉 ?lang=，返回原文
+// 工具：把任意 https URL 转换为内部代理路径，让浏览器通过本 Worker 拉取媒体。
 // ---------------------------------------------------------------------------
 
-/** 把任意 https URL 转换为内部代理路径，让浏览器通过本 Worker 拉取媒体。 */
 function proxyUrl(targetUrl) {
-  return `/proxy/` + encodeURIComponent(targetUrl);
+  return "/proxy/" + encodeURIComponent(targetUrl);
 }
 
-/**
- * 媒体代理：从路径中取回原始 URL，fetch 并流式返回。
- * 路径格式：/proxy/<encodeURIComponent(originalUrl)>
- * Cloudflare Workers 作为普通的 HTTPS 客户端发出请求，不受地区封锁限制。
- */
+// ---------------------------------------------------------------------------
+// 通用媒体代理 —— 视频 / 图片 / 推文内媒体复用同一实现
+// 路径格式：/proxy/<encodeURIComponent(originalUrl)>
+// Cloudflare Workers 作为普通的 HTTPS 客户端发出请求，不受地区封锁限制。
+// ---------------------------------------------------------------------------
+
 async function handleProxy(request) {
   const url = new URL(request.url);
   // pathname = "/proxy/<encoded>" → 取 "/proxy/" 之后的部分再 decode
@@ -46,7 +53,7 @@ async function handleProxy(request) {
     return new Response("only http(s) urls are allowed", { status: 400 });
   }
 
-  // 透传 Range 请求，视频拖拽播放必需
+  // 透传 Range 请求头，视频拖拽播放必需
   const headers = {};
   const range = request.headers.get("range");
   if (range) headers.range = range;
@@ -82,6 +89,7 @@ async function handleProxy(request) {
   out.set("cache-control", "public, max-age=31556952, immutable");
   // CORS 放宽，让 HTML 内 <img>/<video> 跨子域也能正常呈现
   out.set("access-control-allow-origin", "*");
+  out.set("content-disposition", "inline"); // 强制 inline，覆盖上游 attachment
 
   return new Response(upstream.body, {
     status: upstream.status,
@@ -90,10 +98,197 @@ async function handleProxy(request) {
 }
 
 // ---------------------------------------------------------------------------
-// 路由解析
+// 视频服务
 // ---------------------------------------------------------------------------
 
-/** 从请求路径中提取推文 ID，仅支持 username/status/id 形式 */
+function isDirectVideo(cleanPath) {
+  return (
+    cleanPath === "vid/d" ||
+    cleanPath.startsWith("vid/d/")
+  );
+}
+
+async function serveVideo(request, cleanPath, host) {
+  const isDirect = isDirectVideo(cleanPath);
+  let encodedUrl;
+  if (isDirect) {
+    encodedUrl = cleanPath.slice("vid/d/".length);
+  } else {
+    encodedUrl = cleanPath.slice("vid/".length);
+  }
+
+  if (!encodedUrl) {
+    return new Response(videoIndexHtml(host), {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  let rawUrl = encodedUrl;
+  try {
+    rawUrl = decodeURIComponent(encodedUrl);
+  } catch (e) { /* keep encoded */ }
+
+  if (!/^https?:\/\//i.test(rawUrl)) {
+    return new Response(
+      "无效的链接格式。请确保传入的是以 http 或 https 开头（或 URL 编码后）的视频直链",
+      { status: 400 }
+    );
+  }
+
+  // 决定最终喂给播放器的 URL
+  let playerUrl = rawUrl;
+  if (!isDirect) {
+    playerUrl = proxyUrl(rawUrl);
+  }
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Video Player</title>
+<meta content="width=device-width,initial-scale=1.0" name=viewport>
+<style>.artplayer{aspect-ratio:16/9;}</style>
+</head>
+<body>
+<div class="artplayer"></div>
+<script>
+${ARTPLAYER_JS}
+Artplayer.ASPECT_RATIO = ["default", "1:1", "3:4", "4:3", "9:16", "16:9"];
+Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+const art = new Artplayer(
+    {
+    container: ".artplayer",
+    url: "${playerUrl}",
+    playbackRate: true,
+    aspectRatio: true,
+    setting: true,
+    fullscreen: true,
+    miniProgressBar: true,
+    lang: "zh-cn",
+    }
+);
+</script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html;charset=UTF-8",
+      "cache-control": "public, max-age=31556952",
+    },
+  });
+}
+
+function videoIndexHtml(host) {
+  return `<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>ArtPlayer</title></head><body style=\"font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 16px\">
+  <h2>ArtPlayer Worker</h2>
+  <ul>
+      <li><strong>视频代理</strong>：通过 Worker 代理视频流，绕过大多数视频站的防盗链/跨域限制</li>
+      <li><strong>长缓存</strong>：利用 Cloudflare CDN 缓存视频 1 年，加速二次加载</li>
+      <li><strong>直链模式</strong>：<code>/vid/d/&lt;url&gt;</code> 路径可直接播放不经过代理的视频</li>
+  </ul>
+  <h3>使用方法</h3>
+  <h4>代理模式（默认）</h4>
+  <p>https://${host}/vid/<mark>&lt;VIDEO_URL&gt;</mark>（最好是URL编码后的形式）</p>
+  <p>例如：（以下两者等效）</p>
+  <ul>
+      <li><a href="https://${host}/vid/https%3A%2F%2Fsamplelib.com%2Fmp4%2Fsample-5s.mp4">https://${host}/vid/https%3A%2F%2Fsamplelib.com%2Fmp4%2Fsample-5s.mp4</a></li>
+      <li><a href="https://${host}/vid/https://samplelib.com/mp4/sample-5s.mp4">https://${host}/vid/https://samplelib.com/mp4/sample-5s.mp4</a></li>
+  </ul>
+  <p>视频会被 Worker 代理加载，绕过站的反爬限制。</p>
+  <h4>直连模式</h4>
+  <p>https://${host}/vid/d/<mark>&lt;VIDEO_URL&gt;</mark>（最好是URL编码后的形式）</p>
+  <p>绕过 Worker 代理，直接使用视频原始链接播放（适用于没有限制的场景）。</p>
+</body></html>`;
+}
+
+// ---------------------------------------------------------------------------
+// 图片服务
+// ---------------------------------------------------------------------------
+
+async function serveImage(request, cleanPath, host) {
+  const isDirect =
+    cleanPath === "img/d" ||
+    cleanPath.startsWith("img/d/");
+
+  let encodedUrl;
+  if (isDirect) {
+    encodedUrl = cleanPath.slice("img/d/".length);
+  } else {
+    encodedUrl = cleanPath.slice("img/".length);
+  }
+
+  if (!encodedUrl) {
+    return new Response(imageIndexHtml(host), {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  let rawUrl = encodedUrl;
+  try {
+    rawUrl = decodeURIComponent(encodedUrl);
+  } catch (e) { /* keep encoded */ }
+
+  if (!/^https?:\/\//i.test(rawUrl)) {
+    return new Response(
+      "无效的链接格式。请确保传入的是以 http 或 https 开头（或 URL 编码后）的图片直链",
+      { status: 400 }
+    );
+  }
+
+  let imageUrl = rawUrl;
+  if (!isDirect) {
+    imageUrl = proxyUrl(rawUrl);
+  }
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Image Proxy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: transparent; }
+  img { max-width: 100vw; max-height: 100vh; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+</style>
+</head>
+<body>
+  <a href="${imageUrl}" target="_blank"><img src="${imageUrl}" alt="image" /></a>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html;charset=UTF-8",
+      "cache-control": "public, max-age=31556952",
+    },
+  });
+}
+
+function imageIndexHtml(host) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Image Proxy</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 16px">
+  <h2>基于 CF Worker 的图片代理</h2>
+  <p>主要应用在飞书云文档中用于内嵌图片链接，以<strong>预览视图</strong>进行展示</p>
+  <ul>
+      <li><strong>剥离 download</strong>：自动去除上游的 <code>Content-Disposition: attachment</code>，让浏览器始终以内联方式显示图片</li>
+      <li><strong>自适应缩放</strong>：页面 CSS 让图片按原始比例完整展示，不会出现"只看到左上角"的问题</li>
+      <li><strong>长缓存</strong>：利用 Cloudflare CDN 缓存图片 1 年，加速二次加载</li>
+      <li><strong>直链模式</strong>：<code>/img/d/&lt;url&gt;</code> 路径可直接显示不经过代理的图片</li>
+  </ul>
+  <h3>使用方法</h3>
+  <h4>代理模式（默认）</h4>
+  <p>https://${host}/img/<mark>&lt;IMAGE_URL&gt;</mark>（最好是URL编码后的形式）</p>
+  <h4>直连模式</h4>
+  <p>https://${host}/img/d/<mark>&lt;IMAGE_URL&gt;</mark>（最好是URL编码后的形式）</p>
+  <p>绕过 Worker 代理，直接显示图片原始链接（适用于没有 Content-Disposition 限制的场景）。</p>
+</body></html>`;
+}
+
+// ---------------------------------------------------------------------------
+// 路由解析 —— 推文
+// ---------------------------------------------------------------------------
+
+// 从请求路径中提取推文 ID，形式: username/status/id
 function extractPid(raw) {
   const s = (raw || "").trim();
   const m = s.match(/^(\w+)\/status\/(\d+)$/);
@@ -315,7 +510,7 @@ function parseArticle(article, tweetUrl) {
 }
 
 // ---------------------------------------------------------------------------
-// 主流程
+// 推文主流程
 // ---------------------------------------------------------------------------
 
 async function publish(rawPath, cfg) {
@@ -329,7 +524,7 @@ async function publish(rawPath, cfg) {
   const resp = await fetch(apiUrl, {
     headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
     signal: AbortSignal.timeout(API_TIMEOUT_MS),
-    cf: { cacheTtl: 31556952, cacheEverything: true }, // 缓存 1 年，按完整 URL（含 ?lang=）作键
+    cf: { cacheTtl: 31556952, cacheEverything: true },
   });
   if (!resp.ok) throw new Error(`fxtwitter API ${resp.status}`);
   const data = await resp.json();
@@ -388,19 +583,62 @@ function wrapHtml(fullHtml, thisAuthor) {
 </html>`;
 }
 
+// ---------------------------------------------------------------------------
+// 使用说明页
+// ---------------------------------------------------------------------------
+
 function indexHtml(host) {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>X → HTML</title></head><body style="font-family:sans-serif;max-width:640px;margin:40px auto;padding:0 16px">
-<h2>将 X/Twitter 推文转换为HTML</h2>
-<p>格式：https://${host}/\${username}/status/\${post_id}</p>
-<h4>示例</h4>
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>X-Page</title></head><body style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 16px">
+<h2>X-Page Worker</h2>
+
+<h3>🐦 X / Twitter 推文 → HTML</h3>
+<p><code>https://${host}/&lt;username&gt;/status/&lt;tweet_id&gt;</code></p>
+<ul>
+  <li>支持推文、Thread、Article；自动展开链接</li>
+  <li>内置媒体代理，无需外部代理即可在受限地区访问推内图片/视频</li>
+</ul>
+<p>示例：</p>
 <p>原始：<a href="https://x.com/SpaceX/status/2072464558732824680">https://<mark>x.com</mark>/SpaceX/status/2072464558732824680</a></p>
 <p>转换：<a href="https://${host}/SpaceX/status/2072464558732824680">https://<mark>${host}</mark>/SpaceX/status/2072464558732824680</a></p>
+
+<h3>🎬 视频代理</h3>
+<p><code>https://${host}/vid/&lt;VIDEO_URL&gt;</code></p>
+<ul>
+  <li>通过 Worker 代理视频流，绕过防盗链与跨域限制</li>
+  <li>1 年 CDN 缓存；完整透传 <code>Range</code> 请求头，支持拖拽播放</li>
+</ul>
+<p>直连模式：<code>https://${host}/vid/d/&lt;VIDEO_URL&gt;</code>（不经代理）</p>
+<p>示例：<code>https://${host}/vid/https%3A%2F%2Fsamplelib.com%2Fmp4%2Fsample-5s.mp4</code></p>
+
+<h3>🖼️ 图片代理</h3>
+<p><code>https://${host}/img/&lt;IMAGE_URL&gt;</code></p>
+<ul>
+  <li>剥离 <code>Content-Disposition: attachment</code>，强制以 <code>inline</code> 显示</li>
+  <li>自适应缩放，支持飞书云文档等 16:9 预览窗格内完整查看</li>
+  <li>1 年 CDN 缓存</li>
+</ul>
+<p>直连模式：<code>https://${host}/img/d/&lt;IMAGE_URL&gt;</code>（不经代理）</p>
+
+<h3>🔗 通用媒体代理</h3>
+<p><code>https://${host}/proxy/&lt;URL&gt;</code></p>
+<p>直接透传任意 <code>http(s)://</code> 资源，附带 CORS、长缓存。</p>
+
 <hr>
-<h2>Convert X/Twitter to HTML</h2>
-<p>Format: https://${host}/\${username}/status/\${post_id}</p>
-<h4>Example</h4>
-<p>Original: <a href="https://x.com/SpaceX/status/2072464558732824680">https://<mark>x.com</mark>/SpaceX/status/2072464558732824680</a></p>
-<p>Converted: <a href="https://${host}/SpaceX/status/2072464558732824680">https://<mark>${host}</mark>/SpaceX/status/2072464558732824680</a></p>
+<h2>X-Page Worker</h2>
+
+<h3>🐦 X / Twitter → HTML</h3>
+<p><code>https://${host}/&lt;username&gt;/status/&lt;tweet_id&gt;</code></p>
+
+<h3>🎬 Video Proxy</h3>
+<p><code>https://${host}/vid/&lt;VIDEO_URL&gt;</code></p>
+<p>Direct: <code>https://${host}/vid/d/&lt;VIDEO_URL&gt;</code></p>
+
+<h3>🖼️ Image Adaptive Proxy</h3>
+<p><code>https://${host}/img/&lt;IMAGE_URL&gt;</code></p>
+<p>Direct: <code>https://${host}/img/d/&lt;IMAGE_URL&gt;</code></p>
+
+<h3>🔗 Generic Media Proxy</h3>
+<p><code>https://${host}/proxy/&lt;URL&gt;</code></p>
 </body></html>`;
 }
 
@@ -411,42 +649,57 @@ function indexHtml(host) {
 export default {
   async fetch(request, env) {
     const u = new URL(request.url);
-    let path = u.pathname.replace(/^\//, "");
+    let cleanPath = u.pathname.replace(/^\//, "");
     try {
-      path = decodeURIComponent(path);
-    } catch (e) {
-      /* 已 decode 或非法编码，原样使用 */
-    }
+      cleanPath = decodeURIComponent(cleanPath);
+    } catch (e) { /* keep raw */ }
 
-    if (!path || path === "favicon.ico") {
+    // 根路径 → 使用说明
+    if (!cleanPath || cleanPath === "favicon.ico") {
       return new Response(indexHtml(u.host), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
 
-    // 媒体代理路由：/proxy/<encodeURIComponent(url)>
-    if (path === "proxy" || path.startsWith("proxy/")) {
+    // 视频路由
+    if (cleanPath === "vid" || cleanPath.startsWith("vid/")) {
+      return serveVideo(request, cleanPath, u.host);
+    }
+
+    // 图片路由
+    if (cleanPath === "img" || cleanPath.startsWith("img/")) {
+      return serveImage(request, cleanPath, u.host);
+    }
+
+    // 通用媒体代理
+    if (cleanPath === "proxy" || cleanPath.startsWith("proxy/")) {
       return handleProxy(request);
     }
 
+    // 推文路由（兜底）
     const cfg = {
       tz: (env && env.TIMEZONE) || "UTC",
       lang: (env && env.TRANSLATE_TO) || "",
     };
 
-    try {
-      const html = await publish(path, cfg);
-      if (!html) {
-        return new Response("Invalid tweet URL", { status: 400 });
+    const pid = extractPid(cleanPath);
+    if (pid) {
+      try {
+        const html = await publish(cleanPath, cfg);
+        if (!html) {
+          return new Response("Invalid tweet URL", { status: 400 });
+        }
+        return new Response(html, {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "public, max-age=31556952",
+          },
+        });
+      } catch (e) {
+        return new Response("Error: " + (e && e.message ? e.message : String(e)), { status: 502 });
       }
-      return new Response(html, {
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "cache-control": "public, max-age=31556952",
-        },
-      });
-    } catch (e) {
-      return new Response("Error: " + (e && e.message ? e.message : String(e)), { status: 502 });
     }
+
+    return new Response("Not found", { status: 404 });
   },
 };

@@ -1,131 +1,92 @@
-# CLAUDE.md
+# Repository Guidelines
 
-This file provides guidance to Claude Code (claude.ai/code) when working
-with code in this repository.
+This is a single Cloudflare Worker that provides four services behind one hostname. The entire application lives in `worker.js`.
 
-## Project Overview
+## Project Structure
 
-A Cloudflare Worker that converts X/Twitter tweets (including threads and
-Articles) into self-contained HTML pages. It proxies tweet content through
-`api.fxtwitter.com`, renders the result as a standalone HTML document with
-inlined CSS, and serves it. No build step, no dependencies — plain ES module
-JavaScript.
-
-## Stack & Conventions
-
-- **Runtime:** Cloudflare Workers (service name `x`)
-- **Language:** Vanilla JavaScript (ES modules), no TypeScript, no bundler
-- **No npm/`package.json`** — the app has zero runtime dependencies
-- **CSS handling:** `worker.js` imports `.css` files as JS strings via a
-  Wrangler Text module rule (`wrangler.toml` → `rules`). These get inlined
-  into `<style>` tags, making the output HTML fully self-contained (avoids
-  mixed-content blocks)
-- **No linter, formatter, or test suite** configured
-
-## URL Routes
-
-All routes live in the single `fetch` handler in `worker.js`:
-
-- `/{username}/status/{tweet_id}` — canonical tweet URL format
-- `/proxy/<encodeURIComponent(url)>` — **internal media proxy**: fetches
-  the original resource server-side (bypassing regional blocks) and streams
-  it to the browser. Supports `Range` requests for video seeking. All
-  images/videos/avatars in the HTML point here; no external proxy Worker
-  needed.
-- `/` and `/favicon.ico` — returns a bilingual (CN/EN) usage page
-  (`indexHtml`)
-
-The tweet ID is extracted by `extractPid()`. The `/proxy/` route is checked
-before `extractPid`.
-
-## Architecture (`worker.js`, ~470 lines)
-
-The entire application is a single file. Key functions in execution order:
-
-1. **`handleProxy(request)`** — internal media proxy. Reads the target URL
-   from `/proxy/<encoded>`, fetches it server-side, and streams the response
-   back. Passes through `Range` requests for video seeking. Sets
-   `Access-Control-Allow-Origin: *` and `Cache-Control: public, max-age=86400`.
-2. **`extractPid(raw)`** — parses tweet ID from path
-3. **`publish(rawPath, cfg)`** — main flow: fetches
-   `https://api.fxtwitter.com/2/thread/{id}`, walks the thread (sorted
-   `created_timestamp` ascending), builds HTML per post:
-   - `authorTag()` — header with avatar + author + timestamp
-   - `makeUrlClickable()` — auto-links URLs in tweet text
-   - `parseArticle()` — renders Twitter Articles (headers, blockquotes,
-     lists, inline bold/italic via `inlineStyle()`, media, quote tweets, code
-     blocks)
-   - `buildMediaTag()` / `parseMedia()` — image gallery and h.264 MP4
-     videos, with landscape detection for CSS spanning
-   - Quote tweets are recursively rendered (article previews show title +
-     blockquote)
-4. **`wrapHtml(body, author)`** — wraps everything in a full HTML doc with
-   inlined `WATER_CSS` + `TWITTER_CSS`, sets OG tags and viewport
-5. **`formatDate(ts, tz)`** — formats via `Intl.DateTimeFormat`
-6. **`proxyUrl(url)`** — rewrites a media URL to `/proxy/<encoded>` so the
-   browser pulls it through this Worker
-
-API calls use `User-Agent: TelegramBot (like TwitterBot)` and a 3000ms
-`AbortSignal.timeout`.
-
-**Caching strategy** — both the fxtwitter API fetch and the `/proxy/`
-media fetch set `cf: { cacheTtl: 31556952 (1 year), cacheEverything: true }`.
-Tweet IDs are immutable (edits get a new ID), so a 1-year edge cache is
-safe. The proxy cache key is the full encoded URL; the API cache key is
-the full URL including `?lang=`, so different languages don't collide.
-
-## Configuration
-
-**`wrangler.toml`** — Worker entry point and Text module rules for CSS
-imports. Runtime env vars (`[vars]` section, read via `import.meta.env` in
-the Worker):
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `TIMEZONE` | `Asia/Shanghai` | IANA timezone for date rendering |
-| `TRANSLATE_TO` | `zh-cn` | BCP-47 language; sent as `?lang=` to fxtwitter |
-
-**`twitter.css`** — overlay styles on top of water.css: `.tweet-header` flex
-layout, `.tweet-avatar` circle, `.media-gallery` grid (2-col,
-landscape/only-child spans both), `.tweet-media` sizing (80vh,
-`object-fit: contain`).
-
-## Deploy
-
-CI/CD lives in `.github/workflows/deploy.yaml`. Triggers on push to
-`worker.js`, `twitter.css`, `wrangler.toml`, or `deploy.yaml` itself, plus
-`workflow_dispatch`.
-
-Deploy pipeline:
-
-1. Download `water.css` from jsDelivr CDN (it is **not** committed to the
-   repo)
-2. Minify all CSS via `npx esbuild *.css --minify --outdir=. --allow-overwrite`
-3. Deploy via `cloudflare/wrangler-action@v4` using secret
-   `CLOUDFLARE_API_TOKEN`
-
-To deploy locally (requires Wrangler auth):
-
-```bash
-wrangler deploy
+```
+x-page/
+├── worker.js                # single-file ES module; all routing + logic
+├── wrangler.toml            # service config, env vars, observability, Text module rules
+├── water.css                # base styles for tweet HTML (CI-fetched, Text-module inlined)
+├── twitter.css              # tweet-specific overrides (Text-module inlined)
+├── artplayer.js             # Artplayer source (CI-fetched + esbuild minified)
+├── README.md                # end-user-facing docs (Chinese)
+└── .github/workflows/deploy.yaml
 ```
 
-Note: `water.css` must exist locally before deploy (run the curl step
-manually or `npx wrangler deploy` which fetches via the Text module rule).
+## Routing
 
-## External Dependencies
+| Path | Service |
+|---|---|
+| `/<user>/status/<id>` | Tweet → standalone HTML with inlined media |
+| `/vid/<encoded-url>` | Video → player HTML (proxied, Range passthrough) |
+| `/vid/d/<encoded-url>` | Video → player HTML (direct, no proxy) |
+| `/img/<encoded-url>` | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
+| `/img/d/<encoded-url>` | Image → adaptive HTML (direct) |
+| `/proxy/<encoded-url>` | Generic passthrough proxy (any http(s) resource) |
+| `/` | Unified usage page (zh/en) |
 
-- **`api.fxtwitter.com`** — sole upstream API (`/2/thread/{id}`). Worker is
-  essentially an HTML-rendering frontend for it. `Accept: application/json`.
-- **water.css** — fetched at CI time from
-  `cdn.jsdelivr.net/npm/water.css@2/out/water.css`, minified, and inlined.
+Route dispatch in `worker.js`: root → `/vid/` → `/img/` → `/proxy/` → tweet pattern → 404.
 
-## File Map
+## Inlined Assets (Text Module Rules)
 
-| File | Role |
-| --- | --- |
-| `worker.js` | All logic — fetch handler, routing, HTML, media proxy |
-| `wrangler.toml` | Worker config, CSS import rules, env vars |
-| `twitter.css` | Tweet display styles (overlay on water.css) |
-| `.github/workflows/deploy.yaml` | CI/CD — fetch CSS, minify, deploy |
-| `water.css` | _(CI-generated)_ base stylesheet, inlined into output |
+All rendered HTML is fully self-contained — no external `<link>` or `<script>` tags. Three assets are inlined into HTML, each through a different mechanism:
+
+| Asset | Source | Mechanism | In worker.js |
+|---|---|---|---|
+| `water.css` | CDN (jsdelivr) | `Text` module rule → string | `import WATER_CSS from "./water.css"` |
+| `twitter.css` | Repo file | `Text` module rule → string | `import TWITTER_CSS from "./twitter.css"` |
+| `artplayer.mjs` | CI-generated from `artplayer.js` (jsdelivr) | ESM default-exported string | `import ARTPLAYER_JS from "./artplayer.mjs"` |
+
+The CSS assets are minified by `esbuild`; the Artplayer JS avoids esbuild (its minified source contains backticks/`${` that would break template literals) and instead is wrapped by CI as `export default "<JSON-escaped source>"`.
+
+None of these files are committed; CI fetches and transforms them before deploy.
+
+### CI Pipeline (`.github/workflows/deploy.yaml`)
+
+1. `curl` downloads `water.css` from jsdelivr.
+2. `npx esbuild *.css --minify` rewrites both CSS assets in place.
+3. `curl` downloads `artplayer.js` from jsdelivr, then a Node one-liner wraps it as `artplayer.mjs` containing `export default "<stringified source>"` — `JSON.stringify` automatically escapes backticks, `${`, backslashes, etc.
+4. `cloudflare/wrangler-action@v4` deploys.
+5. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
+
+Trigger paths: push to `worker.js`, `twitter.css`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
+
+### Local Development
+
+```bash
+# Download CSS and minify both CSS assets
+curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css -o water.css
+npx esbuild *.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
+
+# Download artplayer.js and wrap as ES module (so backticks/${} in source stay escaped)
+curl -fsSL https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js -o artplayer.js
+node -e '
+const fs = require("fs");
+const src = fs.readFileSync("artplayer.js", "utf8");
+fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n");
+'
+
+# Run locally with hot reload
+npx wrangler dev
+
+# Deploy
+npx wrangler deploy
+```
+
+## Style Conventions
+
+- Vanilla ES module JS. No TypeScript, no bundler, no linter.
+- 2-space indent. Single `worker.js` — all routing, upstream fetch, header mutation, and HTML templates live in that file.
+- User-supplied URLs pass through `encodeURIComponent`; decoded at the edge.
+- All consumer-supplied assets must be inlined into templates; never reference an external origin in rendered HTML.
+
+## Testing
+
+No automated suite. Validate manually: `npx wrangler dev` then curl/navigate each route prefix; use `curl -H "Range: bytes=0-..."` to exercise range passthrough on `/vid/` and `/proxy/`.
+
+## Commit & PRs
+
+- Imperative-mood messages: `add image proxy route`, `fix: strip content-disposition on proxy`.
+- One concern per PR. If you touch routing, include a curl example for each affected prefix.
