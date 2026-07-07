@@ -20,12 +20,14 @@ x-page/
 | Path | Service |
 |---|---|
 | `/<user>/status/<id>` | Tweet → standalone HTML with inlined media |
-| `/vid/<encoded-url>` | Video → player HTML (proxied, Range passthrough) |
-| `/vid/d/<encoded-url>` | Video → player HTML (direct, no proxy) |
-| `/img/<encoded-url>` | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
-| `/img/d/<encoded-url>` | Image → adaptive HTML (direct) |
-| `/proxy/<encoded-url>` | Generic passthrough proxy (any http(s) resource) |
+| `/vid/<raw-url>` | Video → player HTML (proxied, Range passthrough) |
+| `/vid/d/<raw-url>` | Video → player HTML (direct, no proxy) |
+| `/img/<raw-url>` | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
+| `/img/d/<raw-url>` | Image → adaptive HTML (direct) |
+| `/proxy/<raw-url>` | Generic passthrough proxy (any http(s) resource) |
 | `/` | Unified usage page (zh/en) |
+
+> URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
 Route dispatch in `worker.js`: root → `/vid/` → `/img/` → `/proxy/` → tweet pattern → 404.
 
@@ -79,7 +81,10 @@ npx wrangler deploy
 
 - Vanilla ES module JS. No TypeScript, no bundler, no linter.
 - 2-space indent. Single `worker.js` — all routing, upstream fetch, header mutation, and HTML templates live in that file.
-- User-supplied URLs pass through `encodeURIComponent`; decoded at the edge.
+- User-supplied URLs are appended raw at the edge.
+  Only `encodeURIComponent` when the URL contains `?`, `#`, space, or non-ASCII.
+  When unsure, always encoding is safe.
+  One-off tool: [meyerweb dencoder](https://meyerweb.com/eric/tools/dencoder/).
 - All consumer-supplied assets must be inlined into templates; never reference an external origin in rendered HTML.
 
 ## Testing

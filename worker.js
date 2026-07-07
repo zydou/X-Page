@@ -2,11 +2,11 @@
  * Unified service Worker: Twitter-to-HTML, video proxy, image proxy, and generic media proxy behind one hostname.
  *
  * 路由：
- *   /vid/<encodeURIComponent(url)>          内部视频代理 → Artplayer HTML
- *   /vid/d/<encodeURIComponent(url)>        直连视频，不经过代理
- *   /img/<encodeURIComponent(url)>          内部图片代理 → 自适应 HTML
- *   /img/d/<encodeURIComponent(url)>        直连图片，不经过代理
- *   /proxy/<encodeURIComponent(url)>        通用媒体代理（透传 + 长缓存）
+ *   /vid/<url>          Workers视频代理 → Artplayer HTML
+ *   /vid/d/<url>        直连视频，不经过Workers代理
+ *   /img/<url>          Workers图片代理 → 自适应 HTML
+ *   /img/d/<url>        直连图片，不经过Workers代理
+ *   /proxy/<url>        通用媒体代理（透传 + 长缓存）
  *   /<username>/status/<tweet_id>           X/Twitter 推文 → 自包含 HTML
  *   /                                      使用说明页
  *
@@ -130,7 +130,7 @@ async function serveVideo(request, cleanPath, host) {
 
   if (!/^https?:\/\//i.test(rawUrl)) {
     return new Response(
-      "无效的链接格式。请确保传入的是以 http 或 https 开头（或 URL 编码后）的视频直链",
+      "无效的链接格式。请确保传入的是以 http(s) 开头（或 URL 编码后）的视频直链",
       { status: 400 }
     );
   }
@@ -189,16 +189,14 @@ function videoIndexHtml(host) {
   </ul>
   <h3>使用方法</h3>
   <h4>代理模式（默认）</h4>
-  <p>https://${host}/vid/<mark>&lt;VIDEO_URL&gt;</mark>（最好是URL编码后的形式）</p>
-  <p>例如：（以下两者等效）</p>
-  <ul>
-      <li><a href="https://${host}/vid/https%3A%2F%2Fsamplelib.com%2Fmp4%2Fsample-5s.mp4">https://${host}/vid/https%3A%2F%2Fsamplelib.com%2Fmp4%2Fsample-5s.mp4</a></li>
-      <li><a href="https://${host}/vid/https://samplelib.com/mp4/sample-5s.mp4">https://${host}/vid/https://samplelib.com/mp4/sample-5s.mp4</a></li>
-  </ul>
+  <p><a href="https://${host}/vid/https://lorem.video/720p">https://${host}/vid/https://lorem.video/720p</a></p>
   <p>视频会被 Worker 代理加载，绕过站的反爬限制。</p>
   <h4>直连模式</h4>
-  <p>https://${host}/vid/d/<mark>&lt;VIDEO_URL&gt;</mark>（最好是URL编码后的形式）</p>
+  <p><a href="https://${host}/vid/d/https://lorem.video/720p">https://${host}/vid/d/https://lorem.video/720p</a></p>
   <p>绕过 Worker 代理，直接使用视频原始链接播放（适用于没有限制的场景）。</p>
+  <p><small>提示：URL 里有 <code>?</code> <code>#</code> 空格、中文等特殊字符时，需要先 <code>URL编码</code>。</small></p>
+  <p><small><a href="https://meyerweb.com/eric/tools/dencoder/">URL编码工具</a></small></p>
+  <p>例如：<a href="https://${host}/vid/https%3A%2F%2Florem.video%2F720p">https://${host}/vid/https%3A%2F%2Florem.video%2F720p</a></p>
 </body></html>`;
 }
 
@@ -231,7 +229,7 @@ async function serveImage(request, cleanPath, host) {
 
   if (!/^https?:\/\//i.test(rawUrl)) {
     return new Response(
-      "无效的链接格式。请确保传入的是以 http 或 https 开头（或 URL 编码后）的图片直链",
+      "无效的链接格式。请确保传入的是以 http(s) 开头（或 URL 编码后）的图片直链",
       { status: 400 }
     );
   }
@@ -266,21 +264,22 @@ async function serveImage(request, cleanPath, host) {
 }
 
 function imageIndexHtml(host) {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Image Proxy</title></head><body style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:0 16px">
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Image Proxy</title></head><body style="font-family:sans-serif;max-width:600px;margin:40px auto;padding:0 16px">
   <h2>基于 CF Worker 的图片代理</h2>
   <p>主要应用在飞书云文档中用于内嵌图片链接，以<strong>预览视图</strong>进行展示</p>
   <ul>
-      <li><strong>剥离 download</strong>：自动去除上游的 <code>Content-Disposition: attachment</code>，让浏览器始终以内联方式显示图片</li>
-      <li><strong>自适应缩放</strong>：页面 CSS 让图片按原始比例完整展示，不会出现"只看到左上角"的问题</li>
+      <li><strong>剥离 <code>Content-Disposition: attachment</code></strong>：让浏览器始终以内联方式显示图片</li>
+      <li><strong>自适应缩放</strong>：图片按原始比例完整展示</li>
       <li><strong>长缓存</strong>：利用 Cloudflare CDN 缓存图片 1 年，加速二次加载</li>
       <li><strong>直链模式</strong>：<code>/img/d/&lt;url&gt;</code> 路径可直接显示不经过代理的图片</li>
   </ul>
   <h3>使用方法</h3>
   <h4>代理模式（默认）</h4>
-  <p>https://${host}/img/<mark>&lt;IMAGE_URL&gt;</mark>（最好是URL编码后的形式）</p>
+  <p><a href="https://${host}/img/https://picsum.photos/800/600">https://${host}/img/https://picsum.photos/800/600</a></p>
   <h4>直连模式</h4>
-  <p>https://${host}/img/d/<mark>&lt;IMAGE_URL&gt;</mark>（最好是URL编码后的形式）</p>
-  <p>绕过 Worker 代理，直接显示图片原始链接（适用于没有 Content-Disposition 限制的场景）。</p>
+  <p><a href="https://${host}/img/d/https://picsum.photos/800/600">https://${host}/img/d/https://picsum.photos/800/600</a></p>
+  <p>提示：URL 里有 <code>?</code> <code>#</code> 空格、中文等特殊字符时，需要先 <a href="https://meyerweb.com/eric/tools/dencoder/">URL编码</a></p>
+  <p>例如：<a href="https://${host}/img/https%3A%2F%2Fpicsum.photos%2F800%3Fblur%3D2">https://${host}/img/https%3A%2F%2Fpicsum.photos%2F800%3Fblur%3D2</a></p>
 </body></html>`;
 }
 
@@ -592,53 +591,39 @@ function indexHtml(host) {
 <h2>X-Page Worker</h2>
 
 <h3>🐦 X / Twitter 推文 → HTML</h3>
-<p><code>https://${host}/&lt;username&gt;/status/&lt;tweet_id&gt;</code></p>
 <ul>
-  <li>支持推文、Thread、Article；自动展开链接</li>
-  <li>内置媒体代理，无需外部代理即可在受限地区访问推内图片/视频</li>
+<li>支持推文、Thread、Article；自动展开链接</li>
+<li>内置媒体代理，无需外部代理即可在受限地区访问推内图片/视频</li>
 </ul>
-<p>示例：</p>
+<p>格式：https://${host}/&lt;username&gt;/status/&lt;tweet_id&gt;</p>
 <p>原始：<a href="https://x.com/SpaceX/status/2072464558732824680">https://<mark>x.com</mark>/SpaceX/status/2072464558732824680</a></p>
 <p>转换：<a href="https://${host}/SpaceX/status/2072464558732824680">https://<mark>${host}</mark>/SpaceX/status/2072464558732824680</a></p>
 
 <h3>🎬 视频代理</h3>
-<p><code>https://${host}/vid/&lt;VIDEO_URL&gt;</code></p>
 <ul>
-  <li>通过 Worker 代理视频流，绕过防盗链与跨域限制</li>
-  <li>1 年 CDN 缓存；完整透传 <code>Range</code> 请求头，支持拖拽播放</li>
+<li>通过 Worker 代理视频流，绕过防盗链与跨域限制</li>
+<li>1 年 CDN 缓存；完整透传 <code>Range</code> 请求头，支持拖拽播放</li>
 </ul>
-<p>直连模式：<code>https://${host}/vid/d/&lt;VIDEO_URL&gt;</code>（不经代理）</p>
-<p>示例：<code>https://${host}/vid/https%3A%2F%2Fsamplelib.com%2Fmp4%2Fsample-5s.mp4</code></p>
+<p>直连模式：https://${host}/vid/d/&lt;VIDEO_URL&gt;</p>
+<p>格式：https://${host}/vid/&lt;VIDEO_URL&gt;</p>
+<p>示例：<a href="https://${host}/vid/https://lorem.video/720p">https://${host}/vid/https://lorem.video/720p</a></p>
 
 <h3>🖼️ 图片代理</h3>
-<p><code>https://${host}/img/&lt;IMAGE_URL&gt;</code></p>
 <ul>
-  <li>剥离 <code>Content-Disposition: attachment</code>，强制以 <code>inline</code> 显示</li>
-  <li>自适应缩放，支持飞书云文档等 16:9 预览窗格内完整查看</li>
-  <li>1 年 CDN 缓存</li>
+<li>剥离 <code>Content-Disposition: attachment</code>，强制以 <code>inline</code> 显示</li>
+<li>自适应缩放，支持飞书云文档等 16:9 预览窗格内完整查看</li>
+<li>1 年 CDN 缓存</li>
 </ul>
-<p>直连模式：<code>https://${host}/img/d/&lt;IMAGE_URL&gt;</code>（不经代理）</p>
+<p>格式：https://${host}/img/&lt;IMAGE_URL&gt;</p>
+<p>直连模式：https://${host}/img/d/&lt;IMAGE_URL&gt;</p>
 
 <h3>🔗 通用媒体代理</h3>
-<p><code>https://${host}/proxy/&lt;URL&gt;</code></p>
-<p>直接透传任意 <code>http(s)://</code> 资源，附带 CORS、长缓存。</p>
+<p>直接透传任意 http(s):// 资源，附带 CORS、长缓存。</p>
+<p>格式：https://${host}/proxy/&lt;URL&gt;</p>
+<p>示例：<a href="https://${host}/proxy/https://httpbin.org/json">https://${host}/proxy/https://httpbin.org/json</a></p>
 
-<hr>
-<h2>X-Page Worker</h2>
-
-<h3>🐦 X / Twitter → HTML</h3>
-<p><code>https://${host}/&lt;username&gt;/status/&lt;tweet_id&gt;</code></p>
-
-<h3>🎬 Video Proxy</h3>
-<p><code>https://${host}/vid/&lt;VIDEO_URL&gt;</code></p>
-<p>Direct: <code>https://${host}/vid/d/&lt;VIDEO_URL&gt;</code></p>
-
-<h3>🖼️ Image Adaptive Proxy</h3>
-<p><code>https://${host}/img/&lt;IMAGE_URL&gt;</code></p>
-<p>Direct: <code>https://${host}/img/d/&lt;IMAGE_URL&gt;</code></p>
-
-<h3>🔗 Generic Media Proxy</h3>
-<p><code>https://${host}/proxy/&lt;URL&gt;</code></p>
+<p>提示：URL 里有 <code>?</code> <code>#</code> 空格、中文等特殊字符时，需要先 <a href="https://meyerweb.com/eric/tools/dencoder/">URL编码</a></p>
+<p>例如：<a href="https://${host}/proxy/https%3A%2F%2Fpostman-echo.com%2Fget%3Ffoo%3Dbar">https://${host}/proxy/https%3A%2F%2Fpostman-echo.com%2Fget%3Ffoo%3Dbar</a></p>
 </body></html>`;
 }
 

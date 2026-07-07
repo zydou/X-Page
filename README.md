@@ -23,7 +23,7 @@ https://<your-worker-domain>/{username}/status/{tweet_id}
 ### 🎬 视频代理
 
 ```txt
-https://<your-worker-domain>/vid/<URLEncode(视频URL)>
+https://<your-worker-domain>/vid/<视频URL>
 ```
 
 - 通过 Worker 代理视频流，绕过大多数视频站的防盗链与跨域限制
@@ -34,7 +34,7 @@ https://<your-worker-domain>/vid/<URLEncode(视频URL)>
 ### 🖼️ 图片代理
 
 ```txt
-https://<your-worker-domain>/img/<URLEncode(图片URL)>
+https://<your-worker-domain>/img/<图片URL>
 ```
 
 - 剥离 `Content-Disposition: attachment`，强制以内联方式展示
@@ -45,10 +45,18 @@ https://<your-worker-domain>/img/<URLEncode(图片URL)>
 ### 🔗 通用资源代理
 
 ```txt
-https://<your-worker-domain>/proxy/<URLEncode(URL)>
+https://<your-worker-domain>/proxy/<URL>
 ```
 
 直接透传任意 `http(s)://` 资源，附带 CORS 和 1 年缓存。
+
+### ⚠️ 注意事项
+
+> 提示：URL 里有 `?`、`#`、空格、中文等
+>
+> 特殊字符时，需要先 `URL编码`。
+>
+> 可使用 [URL Decoder/Encoder](https://meyerweb.com/eric/tools/dencoder/) 在线工具进行编/解码。
 
 ## 部署
 
