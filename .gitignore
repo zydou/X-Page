@@ -1,0 +1,6 @@
+.wrangler/
+# CI-fetched assets —— 由 GitHub Actions 在部署前从 CDN 重新下载
+# 提交到仓库无意义（CI 每次都会覆盖），仅用于本地开发时让 wrangler dev 能找到文件。
+water.css
+artplayer.js
+artplayer.mjs

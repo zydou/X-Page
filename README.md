@@ -67,10 +67,10 @@ https://<your-worker-domain>/proxy/<URL>
 
 ### 环境变量（wrangler.toml `[vars]`）
 
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `TIMEZONE` | `Asia/Shanghai` | 时区，用于推文时间显示 |
-| `TRANSLATE_TO` | `zh-cn` | 推文翻译目标语言（BCP-47），留空则返回原文 |
+| 变量           | 默认值          | 说明 |
+| -------------- | --------------- | ---- |
+| `TIMEZONE`     | `Asia/Shanghai` | 时区，用于推文时间显示 |
+| `TRANSLATE_TO` | `zh-cn`         | 推文翻译目标语言（BCP-47），留空则返回原文 |
 
 ### 本地开发
 
