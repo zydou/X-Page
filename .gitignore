@@ -1,4 +1,6 @@
 .wrangler/
+# 全局 gitignore 屏蔽了 lib/，但本项目的 lib/utils.js 是源码，需要提交
+!lib/
 # CI-fetched assets —— 由 GitHub Actions 在部署前从 CDN 重新下载
 # 提交到仓库无意义（CI 每次都会覆盖），仅用于本地开发时让 wrangler dev 能找到文件。
 water.css
