@@ -11,6 +11,9 @@ rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
 [vars]
 TIMEZONE = "Asia/Shanghai"
 TRANSLATE_TO = "zh-cn"
+# User-Agent 覆盖：/html/ 路由抓取时的 UA。
+# 默认使用 iOS 微信内置浏览器 UA，用于绕过微信公众号白名单。
+UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.73(0x18004939) NetType/WIFI Language/zh_CN"
 
 # Enable logs
 [observability]

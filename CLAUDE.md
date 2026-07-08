@@ -13,6 +13,7 @@ x-page/
 │   ├── proxy.js             # /proxy/<url> → generic media proxy
 │   ├── video.js             # /vid/<url> and /vid/d/<url> → Artplayer HTML
 │   ├── image.js             # /img/<url> and /img/d/<url> → image viewer HTML
+│   ├── html.js              # /html/<url> → HTML fetch + rewrite
 │   └── tweet.js             # /<user>/status/<id> → tweet HTML
 ├── lib/
 │   └── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
@@ -33,12 +34,13 @@ x-page/
 | `/vid/d/<raw-url>`    | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`      | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
 | `/img/d/<raw-url>`    | Image → adaptive HTML (direct) |
+| `/html/<raw-url>`     | HTML fetch + rewrite (custom UA, strip img referrer) |
 | `/proxy/<raw-url>`    | Generic passthrough proxy (any http(s) resource) |
 | `/`                   | Unified usage page (zh/en) |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
-Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/proxy/` → tweet (fallback) → 404.
+Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/proxy/` → tweet (fallback) → 404.
 
 ## Inlined Assets (Text Module Rules)
 
@@ -66,6 +68,14 @@ None of these files are committed; CI fetches and transforms them before deploy.
 5. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
 
 Trigger paths: push to `worker.js`, `routes/`, `lib/`, `twitter.css`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
+
+## Vars
+
+| Var           | Purpose |
+| ------------- | ------- |
+| `TIMEZONE`    | Tweet timestamp display timezone |
+| `TRANSLATE_TO`| BCP-47 language for tweet translation; blank = original |
+| `UA`          | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 
 ### Local Development
 

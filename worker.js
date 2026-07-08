@@ -16,6 +16,7 @@
  *   /favicon.ico    静默返回 204
  *   /vid/  /vid/d/  视频代理 / 直连
  *   /img/  /img/d/  图片代理 / 直连
+ *   /html/          HTML 抓取 + 改写代理（自定义 UA、防盗链）
  *   /proxy/         通用媒体代理
  *   /<user>/status/<id>  推文（兜底 —— 因为形态最宽泛）
  *   其他            404
@@ -37,6 +38,7 @@ import { indexHtml } from "./routes/index.js";
 import { handleProxy } from "./routes/proxy.js";
 import { serveVideo } from "./routes/video.js";
 import { serveImage } from "./routes/image.js";
+import { serveHtml } from "./routes/html.js";
 import { serveTweet } from "./routes/tweet.js";
 
 /**
@@ -79,6 +81,11 @@ export default {
     // 图片路由
     if (cleanPath === "img" || cleanPath.startsWith("img/")) {
       return serveImage(request, cleanPath, u.host);
+    }
+
+    // HTML 抓取 + 改写代理（微信公众号文章阅读等）
+    if (cleanPath === "html" || cleanPath.startsWith("html/")) {
+      return serveHtml(request, env);
     }
 
     // 通用媒体代理

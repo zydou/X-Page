@@ -50,6 +50,18 @@ https://<your-worker-domain>/proxy/<URL>
 
 直接透传任意 `http(s)://` 资源，附带 CORS 和 1 年缓存。
 
+### 📄 HTML 抓取 + 改写代理
+
+```txt
+https://<your-worker-domain>/html/<URL>
+```
+
+抓取任意网页并以 HTML 返回，解决第三方平台（如飞书）直连被目标服务器拒绝的问题。
+
+- 可自定义 `UA` 绕过微信公众号等对 UA 的白名单限制
+- 自动给所有 `<img>` 注入 `referrerpolicy="no-referrer"`，绕过微信图片防盗链
+- 非 HTML 资源原样透传
+
 ### ⚠️ 注意事项
 
 > 提示：URL 里有 `?`、`#`、空格、中文等
@@ -71,6 +83,7 @@ https://<your-worker-domain>/proxy/<URL>
 | -------------- | --------------- | ---- |
 | `TIMEZONE`     | `Asia/Shanghai` | 时区，用于推文时间显示 |
 | `TRANSLATE_TO` | `zh-cn`         | 推文翻译目标语言（BCP-47），留空则返回原文 |
+| `UA`           | iOS 微信内置浏览器 UA | `/html/` 路由抓取时的 User-Agent，用于绕过微信公众号白名单限制 |
 
 ### 本地开发
 
@@ -100,6 +113,8 @@ npx wrangler dev
 推送以下文件的变更至 `main` 分支时，GitHub Actions 会自动拉取依赖、包装资产、压缩 CSS 并部署：
 
 - `worker.js`
+- `routes/`
+- `lib/`
 - `twitter.css`
 - `wrangler.toml`
 - `.github/workflows/deploy.yaml`
