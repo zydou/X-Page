@@ -65,7 +65,7 @@ None of these files are committed; CI fetches and transforms them before deploy.
 4. `cloudflare/wrangler-action@v4` deploys.
 5. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
 
-Trigger paths: push to `worker.js`, `twitter.css`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
+Trigger paths: push to `worker.js`, `routes/`, `lib/`, `twitter.css`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
 
 ### Local Development
 
