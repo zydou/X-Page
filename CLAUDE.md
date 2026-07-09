@@ -35,14 +35,25 @@ x-page/
 | `/vid/d/<raw-url>`    | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`      | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
 | `/img/d/<raw-url>`    | Image → adaptive HTML (direct) |
-| `/html/<raw-url>`     | HTML fetch + rewrite (custom UA, proxy all resources) |
+| `/html/<raw-url>`     | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs) |
 | `/wechat/<raw-url>`    | WeChat article fetch (title links back to original) |
-| `/proxy/<raw-url>`    | Generic passthrough proxy (any http(s) resource) |
+| `/proxy/<raw-url>`    | Generic passthrough proxy; rewrites JS/CSS relative URLs |
 | `/`                   | Unified usage page (zh/en) |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
 Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/wechat/` → `/proxy/` → tweet (fallback) → 404.
+
+### /html/ rewrite rules
+
+The `/html/` route (`routes/html.js`) fetches the target page and rewrites it with HTMLRewriter before returning:
+
+- **`<img>` / `<video>` / `<audio>` / `<source>` / `<embed>` / `<object>` / `<iframe>` / `<track>`** — rewrite `src`/`data-src`/`srcset`/`poster`/`data` to `/proxy/<encoded>` so media loads through the Worker (bypassing hotlink protection)
+- **`<script>` / `<link>`** — only proxy absolute CDN URLs; skip relative paths (their internal relative imports break when loaded from the worker domain)
+- **`<a>`** — rewrite `href` to `/html/<url>` so navigation stays within the proxy system (relative paths are resolved against the original page URL first)
+- **`<style>` blocks and inline `style` attributes** — rewrite `url(...)` references to proxy paths
+
+The `/proxy/` route (`routes/proxy.js`) additionally rewrites JS/CSS **content**: relative `import("./...")`, `from"./..."`, and `url(...")` references are converted to absolute proxy paths, so Vite-style chunk loading works through the proxy.
 
 ## Inlined Assets (Text Module Rules)
 
