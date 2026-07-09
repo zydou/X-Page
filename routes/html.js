@@ -3,36 +3,32 @@
  * ============================================================
  * HTML 抓取 + 资源代理：/html/<encodeURIComponent(url)>
  *
- * 解决微信公众号文章被第三方平台（如飞书）服务器 IP 拒绝的问题：
- * 让 Worker 作为中立客户端去抓原文，再喂给嵌入环境。
+ * 让 Worker 作为中立客户端抓取任意网页，把所有远程资源 URL
+ * 重写为内部 /proxy/<encoded> 路径后返回。
  *
- * 与 /proxy/ 的关键差异：
- *   - 可覆盖上游 User-Agent：微信公众号对 UA 白名单限制，
- *     通过 wrangler.toml [vars] UA 变量注入真实浏览器 UA
- *   - HTML 改写：把所有需要远程加载的资源 URL 重写成内部
- *     /proxy/<encoded>，让浏览器发出的每个资源请求都走 Worker。
- *     好处：
- *       1. Worker 作为客户端发请求时不带 Referrer，自然绕过
- *          微信图片防盗链
- *       2. Cloudflare 边缘加速，境外图片在国内也能快速访问
- *   - 改写范围（由标签决定）：
- *       <img src/srcset>  <script src>  <link href>
- *       <video src/poster>  <audio src>  <source src/srcset>
- *       <embed src>  <object data>  <iframe src>  <track src>
- *       以及 <style> 块 / 内联 style 属性中的 url(...)
+ * 与 /proxy/ 的差异：
+ *   - 可覆盖 User-Agent（默认 iOS 微信 UA，可通过 [vars] UA 覆盖）
+ *   - 仅对 text/html 做资源改写；非 HTML 原样透传
+ *
+ * 资源改写范围：
+ *   <img src/srcset>  <script src>  <link href>
+ *   <video src/poster>  <audio src>  <source src/srcset>
+ *   <embed src>  <object data>  <iframe src>  <track src>
+ *   <style> 块与内联 style 中的 url(...)
+ *
+ * 好处：
+ *   1. Worker 发请求不带 Referrer，绕过微信图片防盗链
+ *   2. Cloudflare 边缘加速，境外资源国内也能快速访问
  *
  * 被谁调用：
- *   - 入口匹配 /html/ 前缀
- *
- * 路径约定：
- *   Worker 收到的 pathname = "/html/<encoded>"
+ *   - 入口直接匹配 /html/ 前缀
+ *   - /wechat/ 通过 transform 钩子复用本模块
  * ============================================================
  */
 
 import { proxyUrl } from "../lib/utils.js";
 
-// 微信公众号白名单 UA：iOS 微信内置浏览器。
-// 用户可通过 wrangler.toml [vars] UA 覆盖。
+// 默认 UA：iOS 微信内置浏览器，可通过 wrangler.toml [vars] UA 覆盖
 const DEFAULT_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) " +
   "AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 " +
@@ -169,11 +165,13 @@ function rewriteTagAttrs(tagName, attrsText, base) {
  *
  * @param {Request} request 入站请求
  * @param {Object} env wrangler 注入的环境变量（含 vars + secrets）
+ * @param {(html: string, target: string) => string} [transform] 对最终 HTML 的可选改写钩子
+ * @param {string} [prefix="/html/"] 路由前缀，调用方按自己路径传入（如 "/wechat/"）
  * @returns {Response}
  */
-export async function serveHtml(request, env) {
+export async function serveHtml(request, env, transform, prefix = "/html/") {
   const url = new URL(request.url);
-  const encoded = url.pathname.slice("/html/".length);
+  const encoded = url.pathname.slice(prefix.length);
   if (!encoded) return new Response("missing url", { status: 400 });
 
   let target;
@@ -229,7 +227,10 @@ export async function serveHtml(request, env) {
       }
     );
 
-    return new Response(result, {
+    // 可选的后处理（如 /wechat/ 给标题包链接）
+    const finalHtml = transform ? transform(result, target) : result;
+
+    return new Response(finalHtml, {
       status: upstream.status,
       headers: {
         "content-type": contentType,

@@ -17,6 +17,7 @@
  *   /vid/  /vid/d/  视频代理 / 直连
  *   /img/  /img/d/  图片代理 / 直连
  *   /html/          HTML 抓取 + 改写代理（自定义 UA、防盗链）
+ *   /wechat/        微信公众号文章专用（标题可点回原文）
  *   /proxy/         通用媒体代理
  *   /<user>/status/<id>  推文（兜底 —— 因为形态最宽泛）
  *   其他            404
@@ -39,6 +40,7 @@ import { handleProxy } from "./routes/proxy.js";
 import { serveVideo } from "./routes/video.js";
 import { serveImage } from "./routes/image.js";
 import { serveHtml } from "./routes/html.js";
+import { serveWechat } from "./routes/wechat.js";
 import { serveTweet } from "./routes/tweet.js";
 
 /**
@@ -86,6 +88,11 @@ export default {
     // HTML 抓取 + 改写代理（微信公众号文章阅读等）
     if (cleanPath === "html" || cleanPath.startsWith("html/")) {
       return serveHtml(request, env);
+    }
+
+    // 微信公众号文章专用代理（标题可点回原文）
+    if (cleanPath === "wechat" || cleanPath.startsWith("wechat/")) {
+      return serveWechat(request, env);
     }
 
     // 通用媒体代理

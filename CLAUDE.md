@@ -14,6 +14,7 @@ x-page/
 │   ├── video.js             # /vid/<url> and /vid/d/<url> → Artplayer HTML
 │   ├── image.js             # /img/<url> and /img/d/<url> → image viewer HTML
 │   ├── html.js              # /html/<url> → HTML fetch + rewrite
+│   ├── wechat.js            # /wechat/<url> → WeChat article HTML
 │   └── tweet.js             # /<user>/status/<id> → tweet HTML
 ├── lib/
 │   └── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
@@ -34,13 +35,14 @@ x-page/
 | `/vid/d/<raw-url>`    | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`      | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
 | `/img/d/<raw-url>`    | Image → adaptive HTML (direct) |
-| `/html/<raw-url>`     | HTML fetch + rewrite (custom UA, strip img referrer) |
+| `/html/<raw-url>`     | HTML fetch + rewrite (custom UA, proxy all resources) |
+| `/wechat/<raw-url>`    | WeChat article fetch (title links back to original) |
 | `/proxy/<raw-url>`    | Generic passthrough proxy (any http(s) resource) |
 | `/`                   | Unified usage page (zh/en) |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
-Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/proxy/` → tweet (fallback) → 404.
+Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/wechat/` → `/proxy/` → tweet (fallback) → 404.
 
 ## Inlined Assets (Text Module Rules)
 
