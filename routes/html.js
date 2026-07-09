@@ -10,11 +10,17 @@
  *   - 可覆盖 User-Agent（默认 iOS 微信 UA，可通过 [vars] UA 覆盖）
  *   - 仅对 text/html 做资源改写；非 HTML 原样透传
  *
+ * 实现：使用 Cloudflare 原生 HTMLRewriter（流式、零依赖、自动解码
+ * 实体），避免手写正则的脆弱性（误匹配 data-src、漏解 &amp; 等）。
+ *
  * 资源改写范围：
- *   <img src/srcset>  <script src>  <link href>
- *   <video src/poster>  <audio src>  <source src/srcset>
+ *   <img src/data-src/srcset>  <script src>  <link href>
+ *   <video src/poster>  <audio src>  <source src/data-src/srcset>
  *   <embed src>  <object data>  <iframe src>  <track src>
- *   <style> 块与内联 style 中的 url(...)
+ *   <style> 块与内联 style 属性中的 url(...)
+ *
+ * 懒加载兜底：<img>/<source> 若 src 为空但 data-src 有值，
+ * 把后者复制给前者，避免依赖页面 JS 触发才显示。
  *
  * 好处：
  *   1. Worker 发请求不带 Referrer，绕过微信图片防盗链
@@ -37,13 +43,13 @@ const DEFAULT_UA =
 /**
  * 标签 → 其取值当作远程资源 URL 的属性名。
  */
-const TAG_RESOURCE_ATTRS = {
-  img: ["src", "srcset"],
+const RESOURCE_ATTRS_BY_TAG = {
+  img: ["src", "data-src", "srcset"],
   script: ["src"],
   link: ["href"],
   video: ["src", "poster"],
   audio: ["src"],
-  source: ["src", "srcset"],
+  source: ["src", "data-src", "srcset"],
   embed: ["src"],
   object: ["data"],
   iframe: ["src"],
@@ -84,51 +90,6 @@ function resolveUrl(url, base) {
 }
 
 /**
- * 改写单个 srcset 属性值（逗号分隔的 "url [descriptor]" 列表）。
- *
- * @param {string} value
- * @param {string} base
- * @returns {string}
- */
-function rewriteSrcset(value, base) {
-  return value
-    .split(",")
-    .map((entry) => {
-      const parts = entry.trim().split(/\s+/);
-      if (!parts.length) return entry;
-      const url = parts[0];
-      if (!shouldProxy(url)) return entry;
-      parts[0] = proxyUrl(resolveUrl(url, base));
-      return parts.join(" ");
-    })
-    .join(", ");
-}
-
-/**
- * 改写一段属性文本里指定名称的属性值。
- *
- * @param {string} attrsText 仅属性部分，例如 ` src="a.js" class="x"`
- * @param {string} attrName  属性名（小写），如 "src"
- * @param {string} base
- * @returns {string}
- */
-function rewriteAttr(attrsText, attrName, base) {
-  // 匹配 name = "value" / 'value' / 无引号值
-  const re = new RegExp(`\\b${attrName}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, "gi");
-  return attrsText.replace(re, (m, _all, qd, qs, qn) => {
-    const val = qd !== undefined ? qd : qs !== undefined ? qs : qn;
-    if (!shouldProxy(val)) return m;
-    let next;
-    if (attrName === "srcset") {
-      next = rewriteSrcset(val, base);
-    } else {
-      next = proxyUrl(resolveUrl(val, base));
-    }
-    return `${attrName}="${next}"`;
-  });
-}
-
-/**
  * 改写属性文本中任意 url(...) 引用（CSS 背景图、字体等）。
  *
  * @param {string} text
@@ -136,28 +97,93 @@ function rewriteAttr(attrsText, attrName, base) {
  * @returns {string}
  */
 function rewriteCssUrls(text, base) {
-  return text.replace(/url\(\s*(["']?)([^"')\s]+)\1\s*\)/gi, (m, _q, url) => {
-    if (!shouldProxy(url)) return m;
-    return `url("${proxyUrl(resolveUrl(url, base))}")`;
-  });
+  return text.replace(
+    /url\(\s*(["']?)([^"')\s]+)\1\s*\)/gi,
+    (m, _q, url) => {
+      if (!shouldProxy(url)) return m;
+      return `url("${proxyUrl(resolveUrl(url, base))}")`;
+    }
+  );
 }
 
 /**
- * 改写某个标签的远程资源属性（不含标签名本身）。
+ * 构建一个配置好的 HTMLRewriter，封装所有资源改写逻辑。
  *
- * @param {string} tagName 标签名
- * @param {string} attrsText
- * @param {string} base
- * @returns {string}
+ * @param {string} base 被代理页的完整 URL（用于解析相对路径）
+ * @returns {HTMLRewriter}
  */
-function rewriteTagAttrs(tagName, attrsText, base) {
-  const list = TAG_RESOURCE_ATTRS[tagName.toLowerCase()];
-  let out = attrsText;
-  if (list) {
-    for (const a of list) out = rewriteAttr(out, a, base);
+function buildRewriter(base) {
+  const rewriter = new HTMLRewriter();
+
+  // 代理单个普通属性（src / href / data-src / poster / data）
+  function proxyAttr(el, attr) {
+    const val = el.getAttribute(attr);
+    if (val && shouldProxy(val)) {
+      el.setAttribute(attr, proxyUrl(resolveUrl(val, base)));
+    }
   }
-  // 内联 style 属性也可能包含 url(...)，一并改写
-  return rewriteCssUrls(out, base);
+
+  // 代理 srcset（逗号分隔的 "url [descriptor]" 列表）
+  function proxySrcset(el) {
+    const val = el.getAttribute("srcset");
+    if (!val) return;
+    const next = val
+      .split(",")
+      .map((entry) => {
+        const parts = entry.trim().split(/\s+/);
+        if (!parts[0]) return entry;
+        if (!shouldProxy(parts[0])) return entry;
+        parts[0] = proxyUrl(resolveUrl(parts[0], base));
+        return parts.join(" ");
+      })
+      .join(", ");
+    if (next !== val) el.setAttribute("srcset", next);
+  }
+
+  // 1. 资源标签：按 tagName 改写对应属性
+  // 注意 HTMLRewriter 不支持 "a, b, c" 多选择器，需逐个注册；
+  // 用 element.tagName 分发到对应的属性列表。
+  const handler = {
+    element(el) {
+      const attrs = RESOURCE_ATTRS_BY_TAG[el.tagName];
+      if (!attrs) return;
+      for (const a of attrs) {
+        if (a === "srcset") proxySrcset(el);
+        else proxyAttr(el, a);
+      }
+      // 懒加载兜底：src 为空但 data-src 有值时，把后者复制给前者，
+      // 避免依赖页面 JS 触发才显示（典型如微信公众号文章）。
+      if (el.tagName === "img" || el.tagName === "source") {
+        const ds = el.getAttribute("data-src");
+        const src = el.getAttribute("src");
+        if (ds && !src) el.setAttribute("src", ds);
+      }
+    },
+  };
+  for (const tag of Object.keys(RESOURCE_ATTRS_BY_TAG)) {
+    rewriter.on(tag, handler);
+  }
+
+  // 2. <style> 块：改写其中的 url(...)
+  rewriter.on("style", {
+    text(chunk) {
+      if (!chunk.text) return;
+      const replaced = rewriteCssUrls(chunk.text, base);
+      if (replaced !== chunk.text) chunk.replace(replaced);
+    },
+  });
+
+  // 3. 内联 style 属性：改写其中的 url(...)
+  rewriter.on("[style]", {
+    element(el) {
+      const s = el.getAttribute("style");
+      if (!s) return;
+      const r = rewriteCssUrls(s, base);
+      if (r !== s) el.setAttribute("style", r);
+    },
+  });
+
+  return rewriter;
 }
 
 /**
@@ -181,7 +207,7 @@ export async function serveHtml(request, env, transform, prefix = "/html/") {
     return new Response("bad encoding", { status: 400 });
   }
   if (!/^https?:\/\//i.test(target)) {
-    return new Response("only http(s) urls are allowed", { status: 400 });
+    target = "http://" + target;
   }
 
   const ua = (env && env.UA) || DEFAULT_UA;
@@ -200,53 +226,44 @@ export async function serveHtml(request, env, transform, prefix = "/html/") {
 
   const contentType = upstream.headers.get("content-type") || "";
 
-  // HTML：把远程资源全部改写成内部 /proxy/ 路径。
-  if (contentType.includes("text/html")) {
-    const html = await upstream.text();
-
-    // 一次正则完成三类处理：
-    //   1) <script ...>...</script> 块   → 改写 <script> 起始标签的 src，
-    //      块内 JS 原样保留（避免破坏字面值字符串里的 "<img>" 等）
-    //   2) <style ...>...</style> 块    → 改写 <style> 起始标签属性，
-    //      块内 url(...) 改写为代理路径
-    //   3) 其它标签                     → 改写资源属性（含内联 style）
-    // 正则从左到右消费字符串，已匹配区域不会二次访问。
-    const result = html.replace(
-      /(<script\b([^>]*)>)([\s\S]*?)(<\/script>)|(<style\b([^>]*)>)([\s\S]*?)(<\/style>)|<([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/gi,
-      (m, sOpen, sAttrs, sInner, sClose, yOpen, yAttrs, yInner, yClose, tag, tagAttrs) => {
-        // <script ...>...</script>：改写起始标签的 src，块内 JS 原样保留
-        if (sOpen !== undefined) {
-          return `<script${rewriteTagAttrs("script", sAttrs || "", target)}>${sInner}${sClose}`;
-        }
-        // <style ...>...</style>：改写起始标签属性 + 块内 url(...)
-        if (yOpen !== undefined) {
-          return `<style${rewriteTagAttrs("style", yAttrs || "", target)}>${rewriteCssUrls(yInner || "", target)}${yClose}`;
-        }
-        // 普通标签：改写资源属性（含内联 style 中的 url(...)）
-        return `<${tag}${rewriteTagAttrs(tag, tagAttrs, target)}>`;
-      }
-    );
-
-    // 可选的后处理（如 /wechat/ 给标题包链接）
-    const finalHtml = transform ? transform(result, target) : result;
-
-    return new Response(finalHtml, {
-      status: upstream.status,
-      headers: {
-        "content-type": contentType,
-        "cache-control": "public, max-age=300",
-        "access-control-allow-origin": "*",
-      },
-    });
-  }
+  // 统一响应头。
+  // 注意：content-type 必须去掉 charset=... 部分，否则 HTMLRewriter
+  // 会抛 "Unknown character encoding"（它不接受显式字符集声明）。
+  const headers = new Headers();
+  headers.set("content-type", "text/html");
+  headers.set("cache-control", "public, max-age=300");
+  headers.set("access-control-allow-origin", "*");
 
   // 非 HTML（如文本 / 文件下载）：原样透传
-  return new Response(upstream.body, {
-    status: upstream.status,
-    headers: {
-      "content-type": contentType,
-      "cache-control": "public, max-age=300",
-      "access-control-allow-origin": "*",
-    },
-  });
+  if (!contentType.includes("text/html")) {
+    return new Response(upstream.body, { status: upstream.status, headers });
+  }
+
+  try {
+    // HTML：用 HTMLRewriter 流式改写资源路径
+    const rewriter = buildRewriter(target);
+
+    if (transform) {
+      // 有后处理钩子（如 /wechat/ 包标题链接）：需缓冲后应用
+      const transformed = rewriter.transform(
+        new Response(upstream.body, { status: upstream.status, headers })
+      );
+      const html = await transformed.text();
+      const finalHtml = transform(html, target);
+      return new Response(finalHtml, { status: upstream.status, headers });
+    }
+
+    // 无钩子：直接流式输出，零额外内存
+    return rewriter.transform(
+      new Response(upstream.body, { status: upstream.status, headers })
+    );
+  } catch (e) {
+    // 改写失败时降级：重新请求一次，直接返回原始 HTML，保证页面至少能看
+    const fallback = await fetch(target, {
+      headers: { "user-agent": ua, referer: new URL(target).origin + "/" },
+    });
+    const rawHtml = await fallback.text();
+    const finalHtml = transform ? transform(rawHtml, target) : rawHtml;
+    return new Response(finalHtml, { status: upstream.status, headers });
+  }
 }
