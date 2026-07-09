@@ -73,8 +73,14 @@ export async function serveImage(_request, cleanPath, host) {
 <title>Image Proxy</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  html, body { margin: 0; padding: 0; overflow: hidden; background: transparent; }
-  img { max-width: 100vw; max-height: 100vh; object-fit: contain; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  html, body { margin: 0; padding: 0; background: transparent; }
+  body { overflow-x: hidden; overflow-y: auto; }
+  a { display: block; line-height: 0; }
+  img {
+    display: block;
+    width: 100vw;
+    height: auto;
+  }
 </style>
 </head>
 <body>
