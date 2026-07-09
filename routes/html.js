@@ -116,11 +116,16 @@ function buildRewriter(base) {
   const rewriter = new HTMLRewriter();
 
   // 代理单个普通属性（src / href / data-src / poster / data）
+  //
+  // 注意：JS / CSS 也需要代理！
+  // 原始域名通常有 CORS 限制，直接加载会被浏览器阻断。
+  // 代理后虽然 import.meta.url 变成 worker 域名导致内部相对导入错位，
+  // 但这个问题已由 /proxy/ 路由中的内容改写（rewriteJsRelativeUrls /
+  // rewriteCssRelativeUrls）解决——它会把内容中的相对 URL 改写为绝对代理路径。
   function proxyAttr(el, attr) {
     const val = el.getAttribute(attr);
-    if (val && shouldProxy(val)) {
-      el.setAttribute(attr, proxyUrl(resolveUrl(val, base)));
-    }
+    if (!val || !shouldProxy(val)) return;
+    el.setAttribute(attr, proxyUrl(resolveUrl(val, base)));
   }
 
   // 代理 srcset（逗号分隔的 "url [descriptor]" 列表）
@@ -163,6 +168,20 @@ function buildRewriter(base) {
   for (const tag of Object.keys(RESOURCE_ATTRS_BY_TAG)) {
     rewriter.on(tag, handler);
   }
+
+  // 1b. <a> 标签：把 href 改写为 /html/<url>，让用户点击后仍留在代理体系内。
+  // 相对路径 → 解析为原始域名的绝对 URL → 套上 /html/ 前缀。
+  // 已有 /html/ 前缀的不用再处理；javascript: / # 锚点 不处理。
+  rewriter.on("a", {
+    element(el) {
+      const href = el.getAttribute("href");
+      if (!href) return;
+      const t = href.trim();
+      if (!t || /^(javascript:|#|\/html\/)/i.test(t)) return;
+      const absolute = resolveUrl(t, base);
+      el.setAttribute("href", "/html/" + absolute);
+    },
+  });
 
   // 2. <style> 块：改写其中的 url(...)
   rewriter.on("style", {

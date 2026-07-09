@@ -92,8 +92,82 @@ export async function handleProxy(request) {
   out.set("access-control-allow-origin", "*"); // 放宽 CORS，让 HTML 内 <img>/<video> 跨子域呈现
   out.set("content-disposition", "inline"); // 强制 inline，覆盖上游 attachment
 
+  // JS / CSS：改写内容为相对路径 → 绝对代理路径，解决 Vite 等构建工具
+  // 产出的相对 chunk 导入（import("./vendor.js")）在代理后解析错位的问题。
+  const contentType = (out.get("content-type") || "").toLowerCase();
+  const isJs =
+    contentType.includes("javascript") ||
+    target.endsWith(".js") ||
+    target.endsWith(".mjs");
+  const isCss = contentType.includes("text/css") || target.endsWith(".css");
+
+  if (isJs || isCss) {
+    const baseDir = target.includes("/")
+      ? target.slice(0, target.lastIndexOf("/") + 1)
+      : target + "/";
+    let text = await upstream.text();
+    if (isJs) {
+      text = rewriteJsRelativeUrls(text, baseDir);
+    } else {
+      text = rewriteCssRelativeUrls(text, baseDir);
+    }
+    out.delete("content-length"); // 内容已改变
+    return new Response(text, { status: upstream.status, headers: out });
+  }
+
   return new Response(upstream.body, {
     status: upstream.status,
     headers: out,
   });
+}
+
+/**
+ * 改写 JS 中的相对 URL 为绝对代理 URL。
+ * 覆盖 Vite 常见的几种写法：
+ *   import("./foo.js") , import('./foo.js') , import(`./foo.js`)
+ *   from"./foo.js"       , from'./foo.js'       , from`./foo.js`
+ *   import.meta 相关的动态拼接不做处理（极少见）
+ */
+function rewriteJsRelativeUrls(src, baseDir) {
+  const proxy = (rel) => "/proxy/" + encodeURIComponent(resolveUrl(rel, baseDir));
+  // import("relative") / import('relative') / import(`relative`)
+  src = src.replace(
+    /import\s*\(\s*(["'`])((?!\/\/)[^"'`]+?)\1\s*\)/g,
+    (m, q, path) => (/^(https?:)?\/\//.test(path) ? m : `import(${q}${proxy(path)}${q})`)
+  );
+  // from"relative" / from'relative' / from`relative`
+  src = src.replace(
+    /from\s*(["'`])((?!\/\/)[^"'`]+?)\1/g,
+    (m, q, path) => (/^(https?:)?\/\//.test(path) ? m : `from${q}${proxy(path)}${q}`)
+  );
+  // export ... from"relative" 同样处理
+  src = src.replace(
+    /export\s+(?:\*|\{[^}]*\})\s+from\s*(["'`])((?!\/\/)[^"'`]+?)\1/g,
+    (m, q, path) =>
+      /^(https?:)?\/\//.test(path) ? m : `export * from${q}${proxy(path)}${q}`
+  );
+  return src;
+}
+
+/**
+ * 改写 CSS 中的相对 url(...) 为绝对代理 URL。
+ */
+function rewriteCssRelativeUrls(src, baseDir) {
+  const proxy = (rel) => "/proxy/" + encodeURIComponent(resolveUrl(rel, baseDir));
+  return src.replace(
+    /url\(\s*(["']?)((?!\/\/)[^"')]+?)\1\s*\)/g,
+    (m, q, path) =>
+      /^(https?:)?\/\//.test(path) || path.startsWith("data:") ? m : `url(${q}${proxy(path)}${q})`
+  );
+}
+
+/**
+ * 把可能为相对路径的 URL 解析为绝对 URL。
+ */
+function resolveUrl(url, base) {
+  try {
+    return new URL(url, base).href;
+  } catch {
+    return url;
+  }
 }
