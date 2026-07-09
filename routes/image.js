@@ -55,11 +55,9 @@ export async function serveImage(_request, cleanPath, host) {
     /* keep encoded */
   }
 
+  // 没有协议头的裸地址（如 example.com/img.jpg）默认补上 http://
   if (!/^https?:\/\//i.test(rawUrl)) {
-    return new Response(
-      "无效的链接格式。请确保传入的是以 http(s) 开头（或 URL 编码后）的图片直链",
-      { status: 400 }
-    );
+    rawUrl = "http://" + rawUrl;
   }
 
   let imageUrl = rawUrl;

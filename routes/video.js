@@ -74,11 +74,9 @@ export async function serveVideo(_request, cleanPath, host, artplayerJs) {
     /* keep encoded */
   }
 
+  // 没有协议头的裸地址（如 example.com/vid.mp4）默认补上 http://
   if (!/^https?:\/\//i.test(rawUrl)) {
-    return new Response(
-      "无效的链接格式。请确保传入的是以 http(s) 开头（或 URL 编码后）的视频直链",
-      { status: 400 }
-    );
+    rawUrl = "http://" + rawUrl;
   }
 
   // 决定最终喂给播放器的 URL
