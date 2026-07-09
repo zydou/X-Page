@@ -93,12 +93,28 @@ const fs = require("fs");
 const src = fs.readFileSync("artplayer.js", "utf8");
 fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n");
 '
+```
 
-# Run locally with hot reload
-npx wrangler dev
+### Deploy & Test
 
-# Deploy
+**Always deploy and verify directly via `npx wrangler deploy`** — do NOT
+wait for the GitHub Actions `Deploy` workflow to pass. The CI workflow
+is frequently slow / queued for minutes and is not a reliable gate.
+
+```bash
+# Deploy directly (overrides CI for speed & reliability)
 npx wrangler deploy
+
+# Verify each route against the live edge:
+curl https://<host>/html/https%3A%2F%2Fexample.com/
+curl https://<host>/wechat/https%3A%2F%2Fmp.weixin.qq.com%2Fs%2F...
+curl -H "Range: bytes=0-..." https://<host>/proxy/<url>   # range passthrough
+```
+
+Local hot-reload dev (no deploy) for quick iteration:
+
+```bash
+npx wrangler dev
 ```
 
 ## Style Conventions
