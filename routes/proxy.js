@@ -49,9 +49,10 @@ export async function handleProxy(request) {
     return new Response("bad encoding", { status: 400 });
   }
 
-  // 安全基线：只允许 http(s)，避免 file:/javascript: 等 scheme 被利用
+  // 没有协议头的裸地址（如 example.com/path）默认补上 http://，
+  // 提升用户对"直接粘域名"场景的容错。明确写了 https:// 的保持不变。
   if (!/^https?:\/\//i.test(target)) {
-    return new Response("only http(s) urls are allowed", { status: 400 });
+    target = "http://" + target;
   }
 
   // 透传 Range 请求头——视频拖拽播放必需
