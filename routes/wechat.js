@@ -23,10 +23,11 @@ import { serveHtml } from "./html.js";
  * @returns {string}
  */
 function wrapTitleLink(html, target) {
+  // 颜色与 water.css --links 一致（#0076d1），和推文作者链接同色
   return html.replace(
     /(<h1\b[^>]*\bid="activity-name"[^>]*>)([\s\S]*?)<\/h1>/i,
     (_match, openTag, inner) =>
-      `${openTag}<a href="${target}" target="_blank">${inner.trim()}</a></h1>`
+      `${openTag}<a href="${target}" target="_blank" style="color:#0076d1;text-decoration:none">${inner.trim()}</a></h1>`
   );
 }
 
