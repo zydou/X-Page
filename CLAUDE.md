@@ -38,11 +38,12 @@ x-page/
 | `/html/<raw-url>`     | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs) |
 | `/wechat/<raw-url>`    | WeChat article fetch (title links back to original) |
 | `/proxy/<raw-url>`    | Generic passthrough proxy; rewrites JS/CSS relative URLs |
+| `/github/<user>/<repo>`| GitHub README → rendered HTML (media proxied via `/proxy/`) |
 | `/`                   | Unified usage page (zh/en) |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
-Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/wechat/` → `/proxy/` → tweet (fallback) → 404.
+Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/wechat/` → `/proxy/` → `/github/` → tweet (fallback) → 404.
 
 ### /html/ rewrite rules
 
@@ -88,6 +89,7 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrang
 | ------------- | ------- |
 | `TIMEZONE`    | Tweet timestamp display timezone |
 | `TRANSLATE_TO`| BCP-47 language for tweet translation; blank = original |
+| `GITHUB_TOKEN`| Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
 | `UA`          | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 
 ### Local Development

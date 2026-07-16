@@ -41,6 +41,7 @@ import { serveVideo } from "./routes/video.js";
 import { serveImage } from "./routes/image.js";
 import { serveHtml } from "./routes/html.js";
 import { serveWechat } from "./routes/wechat.js";
+import { serveGithub } from "./routes/github.js";
 import { serveTweet } from "./routes/tweet.js";
 
 /**
@@ -98,6 +99,11 @@ export default {
     // 通用媒体代理
     if (cleanPath === "proxy" || cleanPath.startsWith("proxy/")) {
       return handleProxy(request);
+    }
+
+    // GitHub README 自述页渲染（固定前缀 /github/，不会与推文兜底冲突）
+    if (cleanPath === "github" || cleanPath.startsWith("github/")) {
+      return serveGithub(request, env, cleanPath, WATER_CSS);
     }
 
     // 推文路由（兜底 — 因为 /<user>/status/<id> 形态最宽泛，需最后匹配）

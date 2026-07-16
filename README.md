@@ -50,7 +50,7 @@ https://<your-worker-domain>/proxy/<URL>
 
 直接透传任意 `http(s)://` 资源，附带 CORS 和 1 年缓存。
 
-### 📄 HTML 抓取 + 改写代理
+### 📄 HTML 代理
 
 ```txt
 https://<your-worker-domain>/html/<URL>
@@ -65,14 +65,47 @@ https://<your-worker-domain>/html/<URL>
   （避免 Vite 等构建工具的 chunk 导入在代理后解析错位）
 - 非 HTML 资源原样透传
 
-### 💬 微信公众号文章专用
+### 💬 微信公众号文章
 
 ```txt
 https://<your-worker-domain>/wechat/<URL>
 ```
 
-与 `/html/` 共享抓取 + 改写能力，专为微信公众号文章定制：文章标题包裹
-`<a>` 链接回原文，用户在飞书等嵌入环境里点击标题即可跳转阅读。
+与 `/html/` 共享抓取 + 改写能力，专为微信公众号文章定制：文章标题包裹 `<a>` 链接回原文，用户在飞书等嵌入环境里点击标题即可跳转阅读。
+
+### 🐙 GitHub 仓库
+
+```txt
+https://<your-worker-domain>/github/<user>/<repo>
+```
+
+通过 GitHub Contents API 拉取仓库 README 的预渲染 HTML（markdown → HTML + 语法高亮已由 GitHub 完成）， 图片/视频等媒体经 Worker 内部 `/proxy/` 代理加载，避免直连 GitHub 的跨域/防盗链问题。
+
+示例：`https://<your-worker-domain>/github/iOfficeAI/OfficeCLI`
+
+- 仓库不存在或没有 README 时返回友好错误页
+- 可选配置 `GITHUB_TOKEN`（PAT）提升 API 限流配额（未配置时受未认证 60次/h 限制，仅公共仓库）
+
+#### 配置 GITHUB_TOKEN（可选）
+
+`/github/` 路由只读公共仓库的 README， **不需要任何数据读取权限**。
+GitHub 的限流额度绑定的是 token 代表的用户身份（authenticated = 5000次/h），与 token 本身配置了哪些权限无关。
+所以申请 token 时权限保持空即可，这样即使 token 泄露也读不到任何私有数据，同时仍享受 5000次/h 配额。
+
+步骤：
+
+1. 打开 <https://github.com/settings/personal-access-tokens/new>（Fine-grained token，推荐）
+2. 填写 Token name（如 `x-page-worker`），设置过期时间
+3. **Account Permissions / Repository Permissions 全部留空，不要勾选任何一项**
+4. 生成 token，复制保存
+5. 写入 Worker Secret：
+
+```bash
+npx wrangler secret put GITHUB_TOKEN
+# 交互式粘贴 token（或 echo "gp_xxx" | npx wrangler secret put GITHUB_TOKEN）
+```
+
+> 不要直接把 token 明文写进 `wrangler.toml` 的 `[vars]`——那会随代码入库。Secret 加密存于 Cloudflare，运行时仍通过 `env.GITHUB_TOKEN` 读取。
 
 ### ⚠️ 注意事项
 
@@ -91,11 +124,12 @@ https://<your-worker-domain>/wechat/<URL>
 
 ### 环境变量（wrangler.toml `[vars]`）
 
-| 变量           | 默认值          | 说明 |
-| -------------- | --------------- | ---- |
-| `TIMEZONE`     | `Asia/Shanghai` | 时区，用于推文时间显示 |
-| `TRANSLATE_TO` | `zh-cn`         | 推文翻译目标语言（BCP-47），留空则返回原文 |
+| 变量           | 默认值                | 说明 |
+| -------------- | --------------------- | ---- |
+| `TIMEZONE`     | `Asia/Shanghai`       | 时区，用于推文时间显示 |
+| `TRANSLATE_TO` | `zh-cn`               | 推文翻译目标语言（BCP-47），留空则返回原文 |
 | `UA`           | iOS 微信内置浏览器 UA | `/html/` 路由抓取时的 User-Agent，用于绕过微信公众号白名单限制 |
+| `GITHUB_TOKEN` | （空）                | 可选，GitHub Personal Access Token（**权限留空即可**，详见上方说明）。以 Worker Secret 形式存储（`wrangler secret put`），不写入本文件。提升 `/github/` 路由的 API 限流配额（60次/h → 5000次/h） |
 
 ### 本地开发
 

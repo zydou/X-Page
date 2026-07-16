@@ -14,6 +14,8 @@ TRANSLATE_TO = "zh-cn"
 # User-Agent 覆盖：/html/ 路由抓取时的 UA。
 # 默认使用 iOS 微信内置浏览器 UA，用于绕过微信公众号白名单。
 UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.73(0x18004939) NetType/WIFI Language/zh_CN"
+# GITHUB_TOKEN 以 Worker Secret 形式存储（wrangler secret put GITHUB_TOKEN），
+# 不再以明文 var 形式保存。运行时仍通过 env.GITHUB_TOKEN 读取，代码无需改动。
 
 # Enable logs
 [observability]
