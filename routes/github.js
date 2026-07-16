@@ -99,9 +99,21 @@ function buildRewriter(owner, repo) {
     el.setAttribute("src", proxyUrl(resolveUrl(src, owner, repo)));
   }
 
+  // <a>：仅改写相对路径的资源链接为 /proxy/<resolved>，
+  // 修复「图片被 <a href="assets/x.png"> 包裹 → 点击解析到不存在的
+  // /github/<user>/<repo>/assets/x.png」的问题。
+  // 绝对地址的外部链接保持原样（直接跳转）；# 锚点由 shouldProxy 过滤。
+  function proxyAnchor(el) {
+    const href = el.getAttribute("href");
+    if (!shouldProxy(href)) return;
+    if (/^https?:\/\//i.test(href.trim())) return;
+    el.setAttribute("href", proxyUrl(resolveUrl(href, owner, repo)));
+  }
+
   rewriter.on("img", { element: proxyImgSrc });
   rewriter.on("video", { element: proxyMediaSrc });
   rewriter.on("source", { element: proxyMediaSrc });
+  rewriter.on("a", { element: proxyAnchor });
 
   return rewriter;
 }
