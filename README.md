@@ -76,15 +76,25 @@ https://<your-worker-domain>/wechat/<URL>
 ### 🐙 GitHub 仓库
 
 ```txt
-https://<your-worker-domain>/github/<user>/<repo>
+https://<your-worker-domain>/github/<user>/<repo>                  # 默认 README
+https://<your-worker-domain>/github/<user>/<repo>/<path>           # 指定文件或目录
 ```
 
-通过 GitHub Contents API 拉取仓库 README 的预渲染 HTML（markdown → HTML + 语法高亮已由 GitHub 完成）， 图片/视频等媒体经 Worker 内部 `/proxy/` 代理加载，避免直连 GitHub 的跨域/防盗链问题。
+通过 GitHub Contents API 拉取仓库 README 或 **任意文件**的预渲染 HTML（markdown → HTML + 语法高亮已由 GitHub 完成），图片/视频等媒体经 Worker 内部 `/proxy/` 代理加载，避免直连 GitHub
+的跨域/防盗链问题。
 
-示例：`https://<your-worker-domain>/github/iOfficeAI/OfficeCLI`
-
+- `/github/<user>/<repo>` — 展示仓库默认 README（自动识别 README.md / readme.md / README / README.rst 等格式）
+- `/github/<user>/<repo>/<path>` — 展示指定文件；若路径指向目录，则列出目录下的文件与子目录（可点击进入）
+- 顶部 header 显示仓库头像、蓝色路径（`user/repo` 或 `user/repo/path`）以及 Watch / Star / Fork 统计
 - 仓库不存在或没有 README 时返回友好错误页
 - 可选配置 `GITHUB_TOKEN`（PAT）提升 API 限流配额（未配置时受未认证 60次/h 限制，仅公共仓库）
+
+示例：
+
+- `https://<your-worker-domain>/github/iOfficeAI/OfficeCLI` — 默认 README
+- `https://<your-worker-domain>/github/iOfficeAI/OfficeCLI/README_zh.md` — 指定文件
+- `https://<your-worker-domain>/github/iOfficeAI/OfficeCLI/npm/package.json` — 嵌套文件
+- `https://<your-worker-domain>/github/iOfficeAI/OfficeCLI/npm` — 目录列表
 
 #### 配置 GITHUB_TOKEN（可选）
 

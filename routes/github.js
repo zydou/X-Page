@@ -151,17 +151,22 @@ async function fetchRepoMeta(owner, repo, token) {
 }
 
 /**
- * 通过 GitHub Contents API 拉取仓库 README 的预渲染 HTML。
+ * 获取仓库内容：默认 README、指定文件（渲染后 HTML）或目录列表。
  *
- * Accept: application/vnd.github.html → GitHub 返回渲染好的 HTML
- * （markdown 已转 HTML、代码已语法高亮），无需本端再做解析。
+ * - filePath 为空 → 调 /readme 端点，GitHub 自动解析默认 README
+ *   （无论 README.md / readme.md / README / README.rst 都能正确返回）。
+ * - filePath 非空 → 调 /contents/{path}：
+ *     - 文件 → 返回渲染好的 HTML（Accept: html）
+ *     - 目录 → 返回 JSON 数组（即便请求了 html accept）
+ *     - 二进制等不支持 html 渲染 → 403
  *
  * @param {string} owner
  * @param {string} repo
+ * @param {string} filePath 文件路径（可为空 → 默认 README）
  * @param {string} [token] 可选的 GITHUB_TOKEN（pat），提升限流配额
- * @returns {{ ok: boolean, status: number, html: string, contentType: string }}
+ * @returns {{ ok, status, type: "file"|"dir"|"error", html, contentType, listing }}
  */
-async function fetchReadmeHtml(owner, repo, token) {
+async function fetchContent(owner, repo, filePath, token) {
   const headers = {
     Accept: "application/vnd.github.html",
     "X-GitHub-Api-Version": "2022-11-28",
@@ -170,14 +175,35 @@ async function fetchReadmeHtml(owner, repo, token) {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/readme`, {
+  // 空路径 → 默认 README；非空 → 指定路径
+  const url = filePath
+    ? `${GITHUB_API}/repos/${owner}/${repo}/contents/${filePath}`
+    : `${GITHUB_API}/repos/${owner}/${repo}/readme`;
+
+  const res = await fetch(url, {
     headers,
     cf: { cacheTtl: 300, cacheEverything: true }, // 5 分钟边缘缓存，降低 API 压力
   });
 
-  if (!res.ok) return { ok: false, status: res.status, html: "", contentType: "" };
+  if (!res.ok) return { ok: false, status: res.status, type: "error", html: "", contentType: "", listing: [] };
   const contentType = res.headers.get("content-type") || "";
-  return { ok: true, status: 200, html: await res.text(), contentType };
+
+  // 文件：html accept 返回渲染好的 HTML
+  if (contentType.includes("html")) {
+    return { ok: true, status: 200, type: "file", html: await res.text(), contentType, listing: [] };
+  }
+
+  // 目录：GitHub 对目录返回 JSON 数组（即便请求了 html accept）
+  if (contentType.includes("application/json")) {
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      return { ok: true, status: 200, type: "dir", html: "", contentType, listing: data };
+    }
+    // 非数组的 JSON（如二进制文件的 403 错误信息）→ 无法 html 渲染
+    return { ok: false, status: res.status, type: "error", html: "", contentType, listing: [] };
+  }
+
+  return { ok: false, status: res.status, type: "error", html: "", contentType, listing: [] };
 }
 
 /**
@@ -190,27 +216,35 @@ async function fetchReadmeHtml(owner, repo, token) {
  * @param {string} readmeHtml 已改写资源路径的 README body
  * @param {string} owner
  * @param {string} repo
+ * @param {string} filePath 文件路径（空串 = 默认 README）
  * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
  * @param {string} waterCss water.css 源码字符串
  * @returns {string} 完整 HTML 文档
  */
-function wrapPage(readmeHtml, owner, repo, meta, waterCss) {
+function wrapPage(readmeHtml, owner, repo, filePath, meta, waterCss) {
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
+  const safePath = escapeHtml(filePath);
   const avatarUrl = meta?.avatarUrl ? proxyUrl(meta.avatarUrl) : "";
+
+  // 头部路径：默认 README 显示 user/repo，指定文件显示 user/repo/path。
+  const pathDisplay = filePath
+    ? `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/blob/HEAD/${safePath}" target="_blank">${safePath}</a>`
+    : `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>`;
 
   // 头像：有则显示，无则留空占位（保持布局不变）。
   const avatarTag = avatarUrl
     ? `<a href="https://github.com/${safeOwner}" target="_blank"><img src="${avatarUrl}" class="gh-avatar"></a>`
     : `<div class="gh-avatar gh-avatar-ph"></div>`;
 
+  const titleSuffix = filePath ? ` · ${safePath}` : " · README";
   return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${safeOwner}/${safeRepo} · README</title>
+    <title>${safeOwner}/${safeRepo}${titleSuffix}</title>
     <style>
     ${waterCss}
     /* gh-header 布局（仿照 twitter.css 的 .gh-header，内联以便独立修改） */
@@ -251,7 +285,7 @@ function wrapPage(readmeHtml, owner, repo, meta, waterCss) {
             ${avatarTag}
             <div class="gh-info">
                 <div class="gh-repo-path">
-                    <a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>
+                    ${pathDisplay}
                 </div>
             </div>
         </div>
@@ -266,6 +300,125 @@ function wrapPage(readmeHtml, owner, repo, meta, waterCss) {
     </div>
 </body>
 </html>`;
+}
+
+/**
+ * 渲染目录列表页：列出目录下的文件与子目录，可点击进入。
+ *
+ * @param {Array} listing GitHub Contents API 返回的目录项数组
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} dirPath 当前目录路径（空串 = 根目录）
+ * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
+ * @param {string} waterCss water.css 源码字符串
+ * @returns {string} 完整 HTML 文档
+ */
+function renderDirListing(listing, owner, repo, dirPath, meta, waterCss) {
+  const repoUrl = `https://github.com/${owner}/${repo}`;
+  const safeOwner = escapeHtml(owner);
+  const safeRepo = escapeHtml(repo);
+  const avatarUrl = meta?.avatarUrl ? proxyUrl(meta.avatarUrl) : "";
+
+  // 头部路径：根目录显示 user/repo，子目录显示 user/repo/path。
+  const pathDisplay = dirPath
+    ? `<a href="/github/${safeOwner}/${safeRepo}">${safeOwner}/${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/tree/HEAD/${escapeHtml(dirPath)}" target="_blank">${escapeHtml(dirPath)}</a>`
+    : `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>`;
+
+  const avatarTag = avatarUrl
+    ? `<a href="https://github.com/${safeOwner}" target="_blank"><img src="${avatarUrl}" class="gh-avatar"></a>`
+    : `<div class="gh-avatar gh-avatar-ph"></div>`;
+
+  // 父目录链接（根目录时隐藏）。
+  let parentLink = "";
+  if (dirPath) {
+    const parentParts = dirPath.split("/");
+    parentParts.pop();
+    const parentPath = parentParts.join("/");
+    const parentHref = parentPath
+      ? `/github/${safeOwner}/${safeRepo}/${parentPath}`
+      : `/github/${safeOwner}/${safeRepo}`;
+    parentLink = `<a href="${parentHref}" class="gh-dir-parent">..</a>`;
+  }
+
+  // 目录优先、文件次之，各自按名称排序。
+  const dirs = listing.filter((i) => i.type === "dir").sort((a, b) => a.name.localeCompare(b.name));
+  const files = listing.filter((i) => i.type === "file").sort((a, b) => a.name.localeCompare(b.name));
+
+  const renderItem = (item) => {
+    const name = escapeHtml(item.name);
+    const href = `/github/${safeOwner}/${safeRepo}/${(dirPath ? dirPath + "/" : "") + item.name}`;
+    const icon = item.type === "dir" ? "📁" : "📄";
+    const size = item.type === "file" ? `<span class="gh-dir-size">${formatSize(item.size)}</span>` : "";
+    return `<a href="${href}" class="gh-dir-item"><span class="gh-dir-icon">${icon}</span> ${name}${size}</a>`;
+  };
+
+  const itemsHtml = [...dirs, ...files].map(renderItem).join("\n");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${safeOwner}/${safeRepo}${dirPath ? " / " + escapeHtml(dirPath) : ""} · GitHub</title>
+    <style>
+    ${waterCss}
+    /* gh-header 布局（仿照 twitter.css 的 .gh-header，内联以便独立修改） */
+    .gh-header { display:flex; align-items:center; margin-bottom:12px; }
+    .gh-avatar { width:36px; height:36px; border-radius:50%; margin-right:12px; object-fit:cover; }
+    .gh-info { display:flex; flex-direction:column; justify-content:center; line-height:1.4; }
+    body { max-width: 980px; }
+    .gh-topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 16px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; }
+    .gh-topbar .gh-header { margin-bottom:0; border-bottom:none; padding:0; }
+    .gh-avatar-ph { background: var(--background-alt); }
+    .gh-repo-path { font-size:1.1em; font-weight:bold; }
+    .gh-repo-path a { color: var(--links); text-decoration:none; }
+    .gh-repo-path .gh-sep { color: var(--text-muted); font-weight:400; margin:0 4px; }
+    .gh-stats { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .gh-stat { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85em; color:var(--text-main); text-decoration:none; background:var(--background-alt); white-space:nowrap; }
+    .gh-stat:hover { text-decoration:none; background:var(--background); }
+    .gh-stat .gh-stat-count { font-weight:700; }
+    .gh-stat .gh-stat-icon { font-size:0.95em; }
+    /* 目录列表 */
+    .gh-dir-parent { display:inline-block; margin-bottom:10px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; color:var(--links); text-decoration:none; font-size:0.9em; }
+    .gh-dir-parent:hover { text-decoration:underline; }
+    .gh-dir-list { border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+    .gh-dir-item { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); text-decoration:none; color:var(--text-main); }
+    .gh-dir-item:last-child { border-bottom:none; }
+    .gh-dir-item:hover { background:var(--background-alt); }
+    .gh-dir-icon { font-size:1em; }
+    .gh-dir-size { margin-left:auto; color:var(--text-muted); font-size:0.85em; }
+    </style>
+</head>
+<body>
+    <div class="gh-topbar">
+        <div class="gh-header">
+            ${avatarTag}
+            <div class="gh-info">
+                <div class="gh-repo-path">
+                    ${pathDisplay}
+                </div>
+            </div>
+        </div>
+        <div class="gh-stats">
+            <a href="${repoUrl}/watchers" target="_blank" class="gh-stat"><span class="gh-stat-icon">👁</span> Watch <span class="gh-stat-count">${formatCount(meta?.watching ?? 0)}</span></a>
+            <a href="${repoUrl}/stargazers" target="_blank" class="gh-stat"><span class="gh-stat-icon">⭐</span> Star <span class="gh-stat-count">${formatCount(meta?.stars ?? 0)}</span></a>
+            <a href="${repoUrl}/forks" target="_blank" class="gh-stat"><span class="gh-stat-icon">🍴</span> Fork <span class="gh-stat-count">${formatCount(meta?.forks ?? 0)}</span></a>
+        </div>
+    </div>
+    <div class="gh-dir-list">
+        ${parentLink}
+        ${itemsHtml}
+    </div>
+</body>
+</html>`;
+}
+
+/** 格式化文件大小：1024 → "1.0 KB"。 */
+function formatSize(bytes) {
+  if (bytes == null) return "";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
 /** HTML 实体转义，避免 owner/repo 中的特殊字符破坏模板。 */
@@ -292,11 +445,15 @@ function formatCount(n) {
 }
 
 /**
- * 处理 /github/<user>/<repo> 请求。
+ * 处理 /github/<user>/<repo>[/<path>] 请求。
+ *
+ * 路径形态：
+ *   /github/<user>/<repo>            → 默认 README
+ *   /github/<user>/<repo>/<path>     → 指定文件（渲染后 HTML）或目录（文件列表）
  *
  * @param {Request} _request 入站请求（本路由仅从路径取参数，未使用 request 体）
  * @param {Object} env wrangler 注入的环境变量（含可选 GITHUB_TOKEN）
- * @param {string} cleanPath 去首斜杠 + decode 后的路径，如 "github/iOfficeAI/OfficeCLI"
+ * @param {string} cleanPath 去首斜杠 + decode 后的路径，如 "github/iOfficeAI/OfficeCLI/npm/package.json"
  * @param {string} waterCss water.css 源码字符串
  * @returns {Response}
  */
@@ -304,44 +461,50 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
   const rest = cleanPath.slice("github/".length);
   if (!rest) return new Response("missing owner/repo", { status: 400 });
 
-  // 只取前两层：owner/repo；多余段位（如误粘贴树路径）直接截掉。
-  const [owner, repoRaw] = rest.split("/");
-  if (!owner || !repoRaw) return new Response("missing owner/repo", { status: 400 });
-  const repo = repoRaw.split(/[/?#]/)[0];
-  if (!repo) return new Response("missing repo", { status: 400 });
+  // 解析 owner/repo/filePath：前两层为 owner/repo，剩余拼成 filePath。
+  const parts = rest.split("/");
+  const owner = parts[0];
+  const repo = (parts[1] || "").split(/[/?#]/)[0];
+  if (!owner || !repo) return new Response("missing owner/repo", { status: 400 });
+  const filePath = parts.slice(2).join("/").split(/[?#]/)[0];
+
+  // 路径穿越防护：拒绝含 ".." 的段位（GitHub 自身也返回 404，但显式拦截更安全）。
+  if (filePath.split("/").some((seg) => seg === "..")) {
+    return new Response("invalid path", { status: 400 });
+  }
 
   const token = (env && env.GITHUB_TOKEN) || "";
-  // README 与元数据（头像/star/fork/watching）并行请求，不增加往返。
-  const [readme, meta] = await Promise.all([
-    fetchReadmeHtml(owner, repo, token),
+  // 内容（README/文件/目录）与元数据（头像/star/fork/watching）并行请求，不增加往返。
+  const [content, meta] = await Promise.all([
+    fetchContent(owner, repo, filePath, token),
     fetchRepoMeta(owner, repo, token),
   ]);
-  const { ok, status, html, contentType } = readme;
-  if (!ok) {
+
+  // 错误（404 / 403 / 其他）→ 友好错误页。
+  if (!content.ok) {
     const msg =
-      status === 404
-        ? "Repository or README not found (404)"
-        : status === 403
+      content.status === 404
+        ? filePath
+          ? `File or directory not found: ${filePath} (404)`
+          : "Repository or README not found (404)"
+        : content.status === 403
         ? "GitHub API rate limit exceeded (403) — set GITHUB_TOKEN to raise the limit"
-        : `GitHub API error (${status})`;
-    return new Response(errorPage(owner, repo, msg), {
-      status: status === 404 ? 404 : 502,
+        : `GitHub API error (${content.status})`;
+    return new Response(errorPage(owner, repo, filePath, msg), {
+      status: content.status === 404 ? 404 : 502,
       headers: { "content-type": "text/html; charset=utf-8" },
     });
   }
 
-  // 容错：GitHub 若未按 Accept 头返回 HTML（回退到 JSON body），
-  // 直接透传原文，避免把错误/元数据 JSON 当 README 改写。
-  // 与 /html/ 的「非 HTML 原样透传」策略一致。
-  if (!contentType.includes("html")) {
-    return new Response(html, {
-      headers: {
-        "content-type": contentType || "text/plain; charset=utf-8",
-        "cache-control": "public, max-age=300",
-      },
+  // 目录 → 渲染文件列表页。
+  if (content.type === "dir") {
+    const page = renderDirListing(content.listing, owner, repo, filePath, meta, waterCss);
+    return new Response(page, {
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
     });
   }
 
+  // 文件（或默认 README）→ 渲染内容页。
   const rewriter = buildRewriter(owner, repo);
 
   // HTMLRewriter 在 Workers 上是流式、零额外内存；
@@ -349,13 +512,13 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
   // 与 /html/ 的「改写失败 → 退回原始 HTML 兜底」策略一致。
   let bodyHtml;
   try {
-    const transformed = rewriter.transform(new Response(html));
+    const transformed = rewriter.transform(new Response(content.html));
     bodyHtml = await transformed.text();
   } catch (e) {
-    bodyHtml = html;
+    bodyHtml = content.html;
   }
 
-  const page = wrapPage(bodyHtml, owner, repo, meta, waterCss);
+  const page = wrapPage(bodyHtml, owner, repo, filePath, meta, waterCss);
   return new Response(page, {
     headers: {
       "content-type": "text/html; charset=utf-8",
@@ -365,12 +528,16 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
 }
 
 /** 简易错误页，保持与成功页一致的 header 壳。 */
-function errorPage(owner, repo, message) {
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(
-    owner
-  )}/${escapeHtml(repo)} · README</title></head><body style="font-family:sans-serif;max-width:700px;margin:40px auto;padding:0 16px">
-<h2>${escapeHtml(owner)}/${escapeHtml(repo)}</h2>
+function errorPage(owner, repo, filePath, message) {
+  const safeOwner = escapeHtml(owner);
+  const safeRepo = escapeHtml(repo);
+  const safePath = escapeHtml(filePath || "");
+  const pathDisplay = safePath
+    ? `${safeOwner}/${safeRepo}/${safePath}`
+    : `${safeOwner}/${safeRepo}`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${pathDisplay} · GitHub</title></head><body style="font-family:sans-serif;max-width:700px;margin:40px auto;padding:0 16px">
+<h2>${pathDisplay}</h2>
 <p style="color:#b00020">${escapeHtml(message)}</p>
-<p><a href="https://github.com/${escapeHtml(owner)}/${escapeHtml(repo)}">View on GitHub ↗</a></p>
+<p><a href="https://github.com/${safeOwner}/${safeRepo}">View on GitHub ↗</a></p>
 </body></html>`;
 }

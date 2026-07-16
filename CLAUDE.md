@@ -28,18 +28,18 @@ x-page/
 
 ## Routing
 
-| Path                  | Service |
-| --------------------- | ------- |
-| `/<user>/status/<id>` | Tweet → standalone HTML with inlined media |
-| `/vid/<raw-url>`      | Video → player HTML (proxied, Range passthrough) |
-| `/vid/d/<raw-url>`    | Video → player HTML (direct, no proxy) |
-| `/img/<raw-url>`      | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
-| `/img/d/<raw-url>`    | Image → adaptive HTML (direct) |
-| `/html/<raw-url>`     | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs) |
-| `/wechat/<raw-url>`    | WeChat article fetch (title links back to original) |
-| `/proxy/<raw-url>`    | Generic passthrough proxy; rewrites JS/CSS relative URLs |
-| `/github/<user>/<repo>`| GitHub README → rendered HTML (media proxied via `/proxy/`) |
-| `/`                   | Unified usage page (zh/en) |
+| Path                             | Service |
+| -------------------------------- | ------- |
+| `/<user>/status/<id>`            | Tweet → standalone HTML with inlined media |
+| `/vid/<raw-url>`                 | Video → player HTML (proxied, Range passthrough) |
+| `/vid/d/<raw-url>`               | Video → player HTML (direct, no proxy) |
+| `/img/<raw-url>`                 | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
+| `/img/d/<raw-url>`               | Image → adaptive HTML (direct) |
+| `/html/<raw-url>`                | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs) |
+| `/wechat/<raw-url>`              | WeChat article fetch (title links back to original) |
+| `/proxy/<raw-url>`               | Generic passthrough proxy; rewrites JS/CSS relative URLs |
+| `/github/<user>/<repo>[/<path>]` | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
+| `/`                              | Unified usage page (zh/en) |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
@@ -49,12 +49,14 @@ Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/ht
 
 The `/html/` route (`routes/html.js`) fetches the target page and rewrites it with HTMLRewriter before returning:
 
-- **`<img>` / `<video>` / `<audio>` / `<source>` / `<embed>` / `<object>` / `<iframe>` / `<track>`** — rewrite `src`/`data-src`/`srcset`/`poster`/`data` to `/proxy/<encoded>` so media loads through the Worker (bypassing hotlink protection)
+- **`<img>` / `<video>` / `<audio>` / `<source>` / `<embed>` / `<object>` / `<iframe>` / `<track>`** —
+  rewrite `src`/`data-src`/`srcset`/`poster`/`data` to `/proxy/<encoded>` so media loads through the Worker (bypassing hotlink protection)
 - **`<script>` / `<link>`** — only proxy absolute CDN URLs; skip relative paths (their internal relative imports break when loaded from the worker domain)
 - **`<a>`** — rewrite `href` to `/html/<url>` so navigation stays within the proxy system (relative paths are resolved against the original page URL first)
 - **`<style>` blocks and inline `style` attributes** — rewrite `url(...)` references to proxy paths
 
-The `/proxy/` route (`routes/proxy.js`) additionally rewrites JS/CSS **content**: relative `import("./...")`, `from"./..."`, and `url(...")` references are converted to absolute proxy paths, so Vite-style chunk loading works through the proxy.
+The `/proxy/` route (`routes/proxy.js`) additionally rewrites JS/CSS **content**: relative `import("./...")`, `from"./..."`, and `url(...")` references are converted to absolute proxy paths,
+so Vite-style chunk loading works through the proxy.
 
 ## Inlined Assets (Text Module Rules)
 
@@ -85,12 +87,12 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrang
 
 ## Vars
 
-| Var           | Purpose |
-| ------------- | ------- |
-| `TIMEZONE`    | Tweet timestamp display timezone |
-| `TRANSLATE_TO`| BCP-47 language for tweet translation; blank = original |
-| `GITHUB_TOKEN`| Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
-| `UA`          | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
+| Var            | Purpose |
+| -------------- | ------- |
+| `TIMEZONE`     | Tweet timestamp display timezone |
+| `TRANSLATE_TO` | BCP-47 language for tweet translation; blank = original |
+| `GITHUB_TOKEN` | Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
+| `UA`           | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 
 ### Local Development
 
@@ -110,9 +112,8 @@ fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n
 
 ### Deploy & Test
 
-**Always deploy and verify directly via `npx wrangler deploy`** — do NOT
-wait for the GitHub Actions `Deploy` workflow to pass. The CI workflow
-is frequently slow / queued for minutes and is not a reliable gate.
+**Always deploy and verify directly via `npx wrangler deploy`** — do NOT wait for the GitHub Actions `Deploy` workflow to pass.
+The CI workflow is frequently slow / queued for minutes and is not a reliable gate.
 
 ```bash
 # Deploy directly (overrides CI for speed & reliability)

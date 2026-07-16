@@ -55,11 +55,15 @@ export function indexHtml(host) {
 
 <h3>🐙 GitHub 仓库</h3>
 <ul>
-<li>通过 GitHub API 获取仓库 README 的预渲染 HTML</li>
+<li>通过 GitHub API 获取仓库 README 或任意文件的预渲染 HTML</li>
 <li>图片/视频等媒体经 Worker 内部 <code>/proxy/</code> 代理加载，绕过跨域/防盗链</li>
+<li>路径指向目录时列出文件与子目录，可点击进入</li>
+<li>顶部 header 显示仓库头像、蓝色路径与 Watch / Star / Fork 统计</li>
 </ul>
-<p>格式：https://${host}/github/&lt;user&gt;/&lt;repo&gt;</p>
-<p>示例：<a href="https://${host}/github/astral-sh/uv">https://${host}/github/astral-sh/uv</a></p>
+<p>格式：https://${host}/github/&lt;user&gt;/&lt;repo&gt;（默认 README）</p>
+<p>文件：https://${host}/github/&lt;user&gt;/&lt;repo&gt;/&lt;path&gt;</p>
+<p>示例：<a href="https://${host}/github/iOfficeAI/OfficeCLI">https://${host}/github/iOfficeAI/OfficeCLI</a></p>
+<p>文件：<a href="https://${host}/github/iOfficeAI/OfficeCLI/npm/package.json">https://${host}/github/iOfficeAI/OfficeCLI/npm/package.json</a></p>
 
 <h3>📄 HTML 代理</h3>
 <ul>
