@@ -119,6 +119,38 @@ function buildRewriter(owner, repo) {
 }
 
 /**
+ * 获取仓库元数据：owner 头像、star / fork / watching 数量。
+ * 与 fetchReadmeHtml 并行发出（Promise.all），不增加往返。
+ *
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} [token] 可选的 GITHUB_TOKEN（pat），提升限流配额
+ * @returns {{ ok: boolean, status: number, avatarUrl: string, stars: number, forks: number, watching: number }}
+ */
+async function fetchRepoMeta(owner, repo, token) {
+  const headers = {
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "x-page-worker (Cloudflare Worker; +https://github.com/)",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
+    headers,
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!res.ok) return { ok: false, status: res.status, avatarUrl: "", stars: 0, forks: 0, watching: 0 };
+  const d = await res.json();
+  return {
+    ok: true,
+    status: 200,
+    avatarUrl: (d?.owner?.avatar_url) || "",
+    stars: d?.stargazers_count || 0,
+    forks: d?.forks_count || 0,
+    watching: d?.subscribers_count || 0,
+  };
+}
+
+/**
  * 通过 GitHub Contents API 拉取仓库 README 的预渲染 HTML。
  *
  * Accept: application/vnd.github.html → GitHub 返回渲染好的 HTML
@@ -151,20 +183,28 @@ async function fetchReadmeHtml(owner, repo, token) {
 /**
  * 把 README 的 HTML 片断包裹为完整的、自包含的页面。
  *
- * 顶部加一个 header 条显示仓库名并链回 GitHub，正文用 water.css
- * 兜底排版（GitHub 预渲染 HTML 自带类名但没有 CSS，靠 water 的
- * 基础样式保证可读）；代码块 / 表格 / 图片约束在容器宽度内。
+ * 顶部 header 仿照 tweet 的 .gh-header 布局：左侧圆角 avatar + 蓝色
+ * 仓库路径（owner/repo），右侧 Watch / Star / Fork 统计（仿 GitHub 原生）。
+ * 正文用 water.css 兜底排版；代码块 / 表格 / 图片约束在容器宽度内。
  *
  * @param {string} readmeHtml 已改写资源路径的 README body
  * @param {string} owner
  * @param {string} repo
+ * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
  * @param {string} waterCss water.css 源码字符串
  * @returns {string} 完整 HTML 文档
  */
-function wrapPage(readmeHtml, owner, repo, waterCss) {
+function wrapPage(readmeHtml, owner, repo, meta, waterCss) {
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
+  const avatarUrl = meta?.avatarUrl ? proxyUrl(meta.avatarUrl) : "";
+
+  // 头像：有则显示，无则留空占位（保持布局不变）。
+  const avatarTag = avatarUrl
+    ? `<a href="https://github.com/${safeOwner}" target="_blank"><img src="${avatarUrl}" class="gh-avatar"></a>`
+    : `<div class="gh-avatar gh-avatar-ph"></div>`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -173,12 +213,26 @@ function wrapPage(readmeHtml, owner, repo, waterCss) {
     <title>${safeOwner}/${safeRepo} · README</title>
     <style>
     ${waterCss}
+    /* gh-header 布局（仿照 twitter.css 的 .gh-header，内联以便独立修改） */
+    .gh-header { display:flex; align-items:center; margin-bottom:12px; }
+    .gh-avatar { width:36px; height:36px; border-radius:50%; margin-right:12px; object-fit:cover; }
+    .gh-info { display:flex; flex-direction:column; justify-content:center; line-height:1.4; }
     /* GitHub README 预览的轻量补充样式（仅布局兜底，不抢 water 的风头） */
     body { max-width: 980px; }
-    .gh-header { display:flex; align-items:center; gap:8px; padding:10px 16px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; }
-    .gh-header a { color: var(--text-muted); text-decoration:none; }
-    .gh-header .gh-brand { font-weight:600; color:var(--text-main); }
-    .gh-header .gh-sep { color: var(--text-muted); }
+    /* header：左右两栏，左侧仿 tweet，右侧统计 */
+    .gh-topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 16px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; }
+    .gh-topbar .gh-header { margin-bottom:0; border-bottom:none; padding:0; }
+    .gh-avatar-ph { background: var(--background-alt); }
+    /* 仓库路径：owner/repo 用tweet-author 蓝色，分隔符改用-muted */
+    .gh-repo-path { font-size:1.1em; font-weight:bold; }
+    .gh-repo-path a { color: var(--links); text-decoration:none; }
+    .gh-repo-path .gh-sep { color: var(--text-muted); font-weight:400; margin:0 4px; }
+    /* 右侧统计：Watch / Star / Fork，仿 GitHub 原生胶囊造型 */
+    .gh-stats { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .gh-stat { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85em; color:var(--text-main); text-decoration:none; background:var(--background-alt); white-space:nowrap; }
+    .gh-stat:hover { text-decoration:none; background:var(--background); }
+    .gh-stat .gh-stat-count { font-weight:700; }
+    .gh-stat .gh-stat-icon { font-size:0.95em; }
     /* GitHub 预渲染 README 的容器与媒体约束 */
     .markdown-body, #readme { word-wrap: break-word; overflow-wrap: anywhere; }
     /* 隐藏 GitHub 给标题加的永久链接锚点（<a class="anchor"> + 饼齿 # 图标）：
@@ -192,12 +246,20 @@ function wrapPage(readmeHtml, owner, repo, waterCss) {
     </style>
 </head>
 <body>
-    <div class="gh-header">
-        <a href="https://github.com/${safeOwner}" class="gh-brand">${safeOwner}</a>
-        <span class="gh-sep">/</span>
-        <a href="${repoUrl}" class="gh-brand">${safeRepo}</a>
-        <span class="gh-sep">·</span>
-        <a href="${repoUrl}" rel="nofollow">View on GitHub ↗</a>
+    <div class="gh-topbar">
+        <div class="gh-header">
+            ${avatarTag}
+            <div class="gh-info">
+                <div class="gh-repo-path">
+                    <a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>
+                </div>
+            </div>
+        </div>
+        <div class="gh-stats">
+            <a href="${repoUrl}/watchers" target="_blank" class="gh-stat"><span class="gh-stat-icon">👁</span> Watch <span class="gh-stat-count">${formatCount(meta?.watching ?? 0)}</span></a>
+            <a href="${repoUrl}/stargazers" target="_blank" class="gh-stat"><span class="gh-stat-icon">⭐</span> Star <span class="gh-stat-count">${formatCount(meta?.stars ?? 0)}</span></a>
+            <a href="${repoUrl}/forks" target="_blank" class="gh-stat"><span class="gh-stat-icon">🍴</span> Fork <span class="gh-stat-count">${formatCount(meta?.forks ?? 0)}</span></a>
+        </div>
     </div>
     <div id="readme" class="markdown-body">
         ${readmeHtml}
@@ -214,6 +276,19 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * 给统计数字做简短格式化：17867 → "17.9k"，<1000 原样输出。
+ *
+ * @param {number} n
+ * @returns {string}
+ */
+function formatCount(n) {
+  if (!n || n < 0) return "0";
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return (n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, "") + "k";
+  return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "m";
 }
 
 /**
@@ -236,7 +311,12 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
   if (!repo) return new Response("missing repo", { status: 400 });
 
   const token = (env && env.GITHUB_TOKEN) || "";
-  const { ok, status, html, contentType } = await fetchReadmeHtml(owner, repo, token);
+  // README 与元数据（头像/star/fork/watching）并行请求，不增加往返。
+  const [readme, meta] = await Promise.all([
+    fetchReadmeHtml(owner, repo, token),
+    fetchRepoMeta(owner, repo, token),
+  ]);
+  const { ok, status, html, contentType } = readme;
   if (!ok) {
     const msg =
       status === 404
@@ -275,7 +355,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
     bodyHtml = html;
   }
 
-  const page = wrapPage(bodyHtml, owner, repo, waterCss);
+  const page = wrapPage(bodyHtml, owner, repo, meta, waterCss);
   return new Response(page, {
     headers: {
       "content-type": "text/html; charset=utf-8",
