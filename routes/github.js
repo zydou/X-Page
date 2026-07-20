@@ -1,7 +1,7 @@
 /**
  * routes/github.js
  * ============================================================
- * GitHub README 自述页渲染：/github/<user>/<repo>
+ * GitHub README / 代码文件渲染：/github/<user>/<repo>[/<path>]
  *
  * 让 Worker 作为中立客户端调 GitHub Contents API，直接拿到
  * 仓库 README 的预渲染 HTML（markdown → HTML + 语法高亮已由
@@ -19,9 +19,20 @@
  *   - 限流：通过 [vars] GITHUB_TOKEN 传入可选 token，未配置也能用
  *     （仅公共仓库，受未认证 60次/h 限制）。
  *
+ * 文件类型分流（方案一）：
+ *   - 文档（.md/.rst/.org 等）：保持 GitHub API 渲染流程；
+ *     README HTML 里已有 Pygments token <span class="pl-xxx">，
+ *     追加 pygments.css（light + dark，dark 用 @media 包裹）上色。
+ *   - 代码文件（.ts/.py/.go …）：拉 raw 源码，Worker 端用
+ *     highlight.js 的 hljs.highlight() 纯函数直接产出着色好的
+ *     静态 HTML（浏览器零 JS）。内置 15 种核心语言；其余语言
+ *     Worker 按需 fetch 语言模块后注册再高亮，理论上支持全部 192 种。
+ *     主题 CSS（github + github-dark，dark 用 @media 包裹）内联到
+ *     <style>，prefers-color-scheme 自动切换。
+ *
  * 资源改写范围：
  *   <img src/data-canonical-src>  <video src>  <source src>
- *   其它锚点 / 样式链均保留原样（README 链接交给浏览器自己处理）。
+ *   其它锚点 / 样式链均保留原样。
  *
  * 被谁调用：入口直接匹配 /github/ 前缀。
  * ============================================================
@@ -31,6 +42,67 @@ import { proxyUrl } from "../lib/utils.js";
 
 const GITHUB_API = "https://api.github.com";
 const RAW_BASE = "https://raw.githubusercontent.com";
+const HLJS_LANG_CDN = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages";
+
+// Worker 端语言模块内存缓存（同 isolate 内跨请求复用，叠加 cf 边缘缓存）。
+const LANG_MODULE_CACHE = new Map();
+
+// 代码文件最大源码长度：超出则退化为纯文本 <pre>，避免 Worker CPU 爆表。
+const CODE_MAX_CHARS = 200000;
+
+/** 文档扩展名：走 GitHub API 渲染 + Pygments CSS 上色。 */
+const DOC_EXTS = new Set(["md", "markdown", "mdown", "mkdn", "mdx", "rst", "org"]);
+
+/**
+ * 代码文件扩展名 → highlight.js 语言名 映射。
+ * 覆盖 34 种常用语言；含 Dockerfile / Makefilie 等无扩展名风格的同名文件。
+ * 值是 highlight.js 的语言标识，不一定是内置 15 种（非内置走按需 fetch）。
+ */
+const CODE_LANG = new Map([
+  ["js", "javascript"], ["mjs", "javascript"], ["cjs", "javascript"], ["jsx", "javascript"],
+  ["ts", "typescript"], ["tsx", "typescript"], ["mts", "typescript"],
+  ["py", "python"], ["go", "go"], ["rs", "rust"],
+  ["c", "c"], ["h", "c"],
+  ["cpp", "cpp"], ["cc", "cpp"], ["cxx", "cpp"], ["hpp", "cpp"],
+  ["cs", "csharp"], ["java", "java"], ["rb", "ruby"], ["php", "php"],
+  ["swift", "swift"], ["kt", "kotlin"], ["kts", "kotlin"], ["scala", "scala"],
+  ["sh", "bash"], ["bash", "bash"], ["zsh", "bash"],
+  ["ps1", "powershell"], ["sql", "sql"], ["json", "json"],
+  ["yaml", "yaml"], ["yml", "yaml"],
+  ["xml", "xml"], ["html", "html"], ["htm", "html"],
+  ["css", "css"], ["scss", "css"], ["less", "css"],
+  ["dockerfile", "dockerfile"],
+  ["mk", "makefile"], ["makefile", "makefile"],
+  ["vim", "vim"], ["lua", "lua"],
+  ["r", "r"], ["pl", "perl"], ["pm", "perl"],
+  ["dart", "dart"], ["ex", "elixir"], ["exs", "elixir"],
+  ["graphql", "graphql"], ["gql", "graphql"],
+]);
+
+/**
+ * 解析文件路径对应的 highlight.js 语言（或 null）。
+ * 优先扩展名；无扩展名时回退到完整基名（Makefile / Dockerfile）。
+ *
+ * @param {string} filePath
+ * @returns {string|null}
+ */
+function resolveLang(filePath) {
+  const base = (filePath.split("/").pop() ?? "");
+  const dot = base.lastIndexOf(".");
+  let key = "";
+  if (dot > 0) key = base.slice(dot + 1).toLowerCase();
+  else if (dot < 0) key = base.toLowerCase(); // 无扩展名：Makefile / Dockerfile
+  return CODE_LANG.get(key) || null;
+}
+
+/** 是否走文档（API 渲染）路径。 */
+function isDocFile(filePath) {
+  if (!filePath) return true; // 默认 README
+  const base = (filePath.split("/").pop() ?? "");
+  const dot = base.lastIndexOf(".");
+  if (dot <= 0) return false;
+  return DOC_EXTS.has(base.slice(dot + 1).toLowerCase());
+}
 
 /**
  * 是否值得改写为 /proxy/ 路径。
@@ -120,7 +192,7 @@ function buildRewriter(owner, repo) {
 
 /**
  * 获取仓库元数据：owner 头像、star / fork / watching 数量。
- * 与 fetchReadmeHtml 并行发出（Promise.all），不增加往返。
+ * 与 fetchContent / fetchRawSource 并行发出（Promise.all），不增加往返。
  *
  * @param {string} owner
  * @param {string} repo
@@ -159,6 +231,8 @@ async function fetchRepoMeta(owner, repo, token) {
  *     - 文件 → 返回渲染好的 HTML（Accept: html）
  *     - 目录 → 返回 JSON 数组（即便请求了 html accept）
  *     - 二进制等不支持 html 渲染 → 403
+ *
+ * 注意：仅用于文档路径（README/.md/.rst/.org）；代码文件走 fetchRawSource。
  *
  * @param {string} owner
  * @param {string} repo
@@ -207,11 +281,130 @@ async function fetchContent(owner, repo, filePath, token) {
 }
 
 /**
- * 把 README 的 HTML 片断包裹为完整的、自包含的页面。
+ * 拉取代码文件的 raw 源码（ Worker 端高亮用）。
  *
- * 顶部 header 仿照 tweet 的 .gh-header 布局：左侧圆角 avatar + 蓝色
- * 仓库路径（owner/repo），右侧 Watch / Star / Fork 统计（仿 GitHub 原生）。
- * 正文用 water.css 兜底排版；代码块 / 表格 / 图片约束在容器宽度内。
+ * 走 raw.githubusercontent.com/{owner}/{repo}/HEAD/{path}，拿到纯文本源码。
+ * 代码文件不该走 GitHub API 的 html accept（会返回 <div class="plain"><pre>
+ * 纯文本，无高亮），所以单独拉 raw。
+ *
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} filePath
+ * @returns {{ ok: boolean, status: number, text: string }}
+ */
+async function fetchRawSource(owner, repo, filePath) {
+  const url = `${RAW_BASE}/${owner}/${repo}/HEAD/${filePath}`;
+  const res = await fetch(url, {
+    headers: {
+      Accept: "text/plain, text/*, */*",
+      "User-Agent": "x-page-worker (Cloudflare Worker; +https://github.com/)",
+    },
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!res.ok) return { ok: false, status: res.status, text: "" };
+  return { ok: true, status: 200, text: await res.text() };
+}
+
+/**
+ * Worker 端按需 fetch highlight.js 语言模块源码并缓存。
+ *
+ * 语言模块 UMD 形态是立即注册的 IIFE：
+ *   (()=>{ ...; hljs.registerLanguage("csharp", grammar) })()
+ * highlight.mjs 暴露的 highlightWith(value, language, source) 用
+ * new Function("hljs", source)(hljs) 在 hljs 作用域里执行它完成注册。
+ *
+ * @param {string} language highlight.js 语言名
+ * @returns {Promise<string|null>} 模块源码；失败返回 null
+ */
+async function fetchLangModule(language) {
+  const cached = LANG_MODULE_CACHE.get(language);
+  if (cached) return cached;
+  const res = await fetch(`${HLJS_LANG_CDN}/${language}.min.js`, {
+    cf: { cacheTtl: 86400, cacheEverything: true }, // 语言模块几乎不变，缓存 24h
+  });
+  if (!res.ok) return null;
+  const src = await res.text();
+  LANG_MODULE_CACHE.set(language, src);
+  return src;
+}
+
+/**
+ * Worker 端把源码渲染成着色好的静态 HTML。
+ *
+ * - 内置语言（highlight.mjs 的 BUILTIN_LANGS）→ 直接 highlightCode。
+ * - 其它语言 → 按需 fetch 语言模块再由 highlightWith 注册后高亮。
+ * - 超长源码（> CODE_MAX_CHARS）或高亮失败 → 退化为纯文本。
+ *
+ * @param {string} source 源码原文
+ * @param {string} language highlight.js 语言名
+ * @param {object} hljs worker.js 传入的 highlight.mjs 命名空间
+ * @returns {Promise<{ html: string, plain: boolean }>} colored HTML（已是转义好的 <span class="hljs-xxx"> 片段）
+ */
+async function renderHighlighted(source, language, hljs) {
+  if (source.length > CODE_MAX_CHARS) {
+    return { html: escapeHtml(source), plain: true };
+  }
+  try {
+    if (hljs.BUILTIN_LANGS.has(language)) {
+      return { html: hljs.highlightCode(source, language), plain: false };
+    }
+    const mod = await fetchLangModule(language);
+    if (mod) return { html: hljs.highlightWith(source, language, mod), plain: false };
+    return { html: escapeHtml(source), plain: true };
+  } catch (e) {
+    return { html: escapeHtml(source), plain: true };
+  }
+}
+
+/**
+ * 渲染文档（README/.md/.rst/.org）内容页的 <header> + 统计条。
+ * 文档与代码页共用同一个顶部条，此处提取为纯函数复用。
+ *
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} filePath
+ * @param {object} meta
+ * @returns {string} .gh-topbar 片段
+ */
+function renderTopbar(owner, repo, filePath, meta) {
+  const repoUrl = `https://github.com/${owner}/${repo}`;
+  const safeOwner = escapeHtml(owner);
+  const safeRepo = escapeHtml(repo);
+  const safePath = escapeHtml(filePath);
+  const avatarUrl = meta?.avatarUrl ? proxyUrl(meta.avatarUrl) : "";
+
+  const pathDisplay = filePath
+    ? `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/blob/HEAD/${safePath}" target="_blank">${safePath}</a>`
+    : `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>`;
+
+  const avatarTag = avatarUrl
+    ? `<a href="https://github.com/${safeOwner}" target="_blank"><img src="${avatarUrl}" class="gh-avatar"></a>`
+    : `<div class="gh-avatar gh-avatar-ph"></div>`;
+
+  return `<div class="gh-topbar">
+        <div class="gh-header">
+            ${avatarTag}
+            <div class="gh-info">
+                <div class="gh-repo-path">
+                    ${pathDisplay}
+                </div>
+            </div>
+        </div>
+        <div class="gh-stats">
+            <a href="${repoUrl}/watchers" target="_blank" class="gh-stat"><span class="gh-stat-icon">👁</span> Watch <span class="gh-stat-count">${formatCount(meta?.watching ?? 0)}</span></a>
+            <a href="${repoUrl}/stargazers" target="_blank" class="gh-stat"><span class="gh-stat-icon">⭐</span> Star <span class="gh-stat-count">${formatCount(meta?.stars ?? 0)}</span></a>
+            <a href="${repoUrl}/forks" target="_blank" class="gh-stat"><span class="gh-stat-icon">🍴</span> Fork <span class="gh-stat-count">${formatCount(meta?.forks ?? 0)}</span></a>
+        </div>
+    </div>`;
+}
+
+/**
+ * 把 README 文档的 HTML 片断包裹为完整的、自包含的页面。
+ *
+ * 复用了原来的 .gh-topbar 布局；正文用 water.css 兜底排版；代码块 /
+ * 表格 / 图片约束在容器宽度内。追加 pygments.css 让 GitHub 已渲染好的
+ * <span class="pl-xxx"> token 在 light/dark 下都显示颜色（dark 用
+ * @media (prefers-color-scheme: dark) 包裹）。
  *
  * @param {string} readmeHtml 已改写资源路径的 README body
  * @param {string} owner
@@ -219,25 +412,13 @@ async function fetchContent(owner, repo, filePath, token) {
  * @param {string} filePath 文件路径（空串 = 默认 README）
  * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
  * @param {string} waterCss water.css 源码字符串
+ * @param {string} pygmentsCss 提取的 .pl-* token 着色规则（含 dark @media）
  * @returns {string} 完整 HTML 文档
  */
-function wrapPage(readmeHtml, owner, repo, filePath, meta, waterCss) {
-  const repoUrl = `https://github.com/${owner}/${repo}`;
+function wrapDocPage(readmeHtml, owner, repo, filePath, meta, waterCss, pygmentsCss) {
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
   const safePath = escapeHtml(filePath);
-  const avatarUrl = meta?.avatarUrl ? proxyUrl(meta.avatarUrl) : "";
-
-  // 头部路径：默认 README 显示 user/repo，指定文件显示 user/repo/path。
-  const pathDisplay = filePath
-    ? `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/blob/HEAD/${safePath}" target="_blank">${safePath}</a>`
-    : `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>`;
-
-  // 头像：有则显示，无则留空占位（保持布局不变）。
-  const avatarTag = avatarUrl
-    ? `<a href="https://github.com/${safeOwner}" target="_blank"><img src="${avatarUrl}" class="gh-avatar"></a>`
-    : `<div class="gh-avatar gh-avatar-ph"></div>`;
-
   const titleSuffix = filePath ? ` · ${safePath}` : " · README";
   return `<!DOCTYPE html>
 <html>
@@ -269,35 +450,83 @@ function wrapPage(readmeHtml, owner, repo, filePath, meta, waterCss) {
     .gh-stat .gh-stat-icon { font-size:0.95em; }
     /* GitHub 预渲染 README 的容器与媒体约束 */
     .markdown-body, #readme { word-wrap: break-word; overflow-wrap: anywhere; }
-    /* 隐藏 GitHub 给标题加的永久链接锚点（<a class="anchor"> + 饼齿 # 图标）：
-       脱离 GitHub 自带 CSS 后它会渲染成一个独立链接符号占一整行，
-       且点击跳的是当前页 #xxx 锚点，在代理页面里完全无用。 */
     .markdown-body a.anchor, #readme a.anchor { display: none; }
     .markdown-body img, #readme img { max-width: 100%; height: auto; box-sizing: border-box; }
     .markdown-body video, #readme video { max-width: 100%; }
     .markdown-body pre, #readme pre { overflow-x: auto; }
     .markdown-body table, #readme table { max-width: 100%; display: block; overflow-x: auto; }
+    /* Pygments token 着色（pl-xxx）：让 GitHub 已渲染好的 token 显示颜色，light + dark 自动切换 */
+    ${pygmentsCss}
     </style>
 </head>
 <body>
-    <div class="gh-topbar">
-        <div class="gh-header">
-            ${avatarTag}
-            <div class="gh-info">
-                <div class="gh-repo-path">
-                    ${pathDisplay}
-                </div>
-            </div>
-        </div>
-        <div class="gh-stats">
-            <a href="${repoUrl}/watchers" target="_blank" class="gh-stat"><span class="gh-stat-icon">👁</span> Watch <span class="gh-stat-count">${formatCount(meta?.watching ?? 0)}</span></a>
-            <a href="${repoUrl}/stargazers" target="_blank" class="gh-stat"><span class="gh-stat-icon">⭐</span> Star <span class="gh-stat-count">${formatCount(meta?.stars ?? 0)}</span></a>
-            <a href="${repoUrl}/forks" target="_blank" class="gh-stat"><span class="gh-stat-icon">🍴</span> Fork <span class="gh-stat-count">${formatCount(meta?.forks ?? 0)}</span></a>
-        </div>
-    </div>
+    ${renderTopbar(owner, repo, filePath, meta)}
     <div id="readme" class="markdown-body">
         ${readmeHtml}
     </div>
+</body>
+</html>`;
+}
+
+/**
+ * 把代码文件渲染成完整的自包含页面（Worker 端已着色，浏览器零 JS）。
+ *
+ * 顶部复用 .gh-topbar 布局；正文是 <pre><code> 包着 hljs.highlight()
+ * 产出的静态 <span class="hljs-xxx"> 着色片段。主题 CSS（github + github-dark，
+ * dark 用 @media prefers-color-scheme: dark 包裹）内联到 <style>。
+ *
+ * @param {string} colored htl highlight() 产出的着色 HTML（已含 <span class="hljs-xxx">）
+ * @param {string} language highlight.js 语言名（用于 class="language-xxx" 标记）
+ * @param {boolean} plain 是否退化为纯文本（超长 / 失败）
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} filePath
+ * @param {string} meta
+ * @param {string} waterCss
+ * @param {string} themeCss github + github-dark 主题（dark 已用 @media 包裹）
+ * @returns {string} 完整 HTML 文档
+ */
+function wrapCodePage(colored, language, plain, owner, repo, filePath, meta, waterCss, themeCss) {
+  const safeOwner = escapeHtml(owner);
+  const safeRepo = escapeHtml(repo);
+  const safePath = escapeHtml(filePath);
+  const safeLang = escapeHtml(language);
+  // 着色成功的代码块标上 language-xxx class（便于用户复制 / 主题样式），纯文本退化解不标。
+  const codeClass = plain ? "" : ` class="language-${safeLang}"`;
+  return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${safeOwner}/${safeRepo} · ${safePath}</title>
+    <style>
+    ${waterCss}
+    .gh-header { display:flex; align-items:center; margin-bottom:12px; }
+    .gh-avatar { width:36px; height:36px; border-radius:50%; margin-right:12px; object-fit:cover; }
+    .gh-info { display:flex; flex-direction:column; justify-content:center; line-height:1.4; }
+    body { max-width: 980px; }
+    .gh-topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 16px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; }
+    .gh-topbar .gh-header { margin-bottom:0; border-bottom:none; padding:0; }
+    .gh-avatar-ph { background: var(--background-alt); }
+    .gh-repo-path { font-size:1.1em; font-weight:bold; }
+    .gh-repo-path a { color: var(--links); text-decoration:none; }
+    .gh-repo-path .gh-sep { color: var(--text-muted); font-weight:400; margin:0 4px; }
+    .gh-stats { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+    .gh-stat { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85em; color:var(--text-main); text-decoration:none; background:var(--background-alt); white-space:nowrap; }
+    .gh-stat:hover { text-decoration:none; background:var(--background); }
+    .gh-stat .gh-stat-count { font-weight:700; }
+    .gh-stat .gh-stat-icon { font-size:0.95em; }
+    /* 代码块容器：字体 + 边框 + 横向滚动 */
+    .gh-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .gh-code pre { margin: 0; line-height: 1.5; border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; white-space: pre; tab-size: 4; }
+    .gh-code code { display: block; }
+    /* highlight.js 主题（github light + github-dark）：prefers-color-scheme 自动切换明暗 */
+    ${themeCss}
+    </style>
+</head>
+<body>
+    ${renderTopbar(owner, repo, filePath, meta)}
+    <div class="gh-code"><pre><code${codeClass}>${colored}</code></pre></div>
 </body>
 </html>`;
 }
@@ -375,12 +604,12 @@ function renderDirListing(listing, owner, repo, dirPath, meta, waterCss) {
     .gh-repo-path .gh-sep { color: var(--text-muted); font-weight:400; margin:0 4px; }
     .gh-stats { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
     .gh-stat { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85em; color:var(--text-main); text-decoration:none; background:var(--background-alt); white-space:nowrap; }
-    .gh-stat:hover { text-decoration:none; background:var(--background); }
+    .gh-stat-hover:hover { text-decoration:none; background:var(--background); }
     .gh-stat .gh-stat-count { font-weight:700; }
     .gh-stat .gh-stat-icon { font-size:0.95em; }
     /* 目录列表 */
     .gh-dir-parent { display:inline-block; margin-bottom:10px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; color:var(--links); text-decoration:none; font-size:0.9em; }
-    .gh-dir-parent:hover { text-decoration:underline; }
+    .gh-dir-parent:hover { text-decoration:none; text-decoration:underline; }
     .gh-dir-list { border:1px solid var(--border); border-radius:6px; overflow:hidden; }
     .gh-dir-item { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); text-decoration:none; color:var(--text-main); }
     .gh-dir-item:last-child { border-bottom:none; }
@@ -449,15 +678,17 @@ function formatCount(n) {
  *
  * 路径形态：
  *   /github/<user>/<repo>            → 默认 README
- *   /github/<user>/<repo>/<path>     → 指定文件（渲染后 HTML）或目录（文件列表）
+ *   /github/<user>/<repo>/<path>     → 指定文件（文档/代码）或目录（文件列表）
  *
  * @param {Request} _request 入站请求（本路由仅从路径取参数，未使用 request 体）
  * @param {Object} env wrangler 注入的环境变量（含可选 GITHUB_TOKEN）
  * @param {string} cleanPath 去首斜杠 + decode 后的路径，如 "github/iOfficeAI/OfficeCLI/npm/package.json"
  * @param {string} waterCss water.css 源码字符串
+ * @param {string} pygmentsCss 提取的 .pl-* token 着色规则（含 dark @media）
+ * @param {object} hljs highlight.mjs 命名空间 { highlightCode, highlightWith, BUILTIN_LANGS, HLJS_THEME_CSS }
  * @returns {Response}
  */
-export async function serveGithub(_request, env, cleanPath, waterCss) {
+export async function serveGithub(_request, env, cleanPath, waterCss, pygmentsCss, hljs) {
   const rest = cleanPath.slice("github/".length);
   if (!rest) return new Response("missing owner/repo", { status: 400 });
 
@@ -474,7 +705,37 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
   }
 
   const token = (env && env.GITHUB_TOKEN) || "";
-  // 内容（README/文件/目录）与元数据（头像/star/fork/watching）并行请求，不增加往返。
+
+  // 文件类型分流：
+  //   - 代码文件（含扩展名映射到 highlight.js 语言）→ 拉 raw 源码，Worker 端高亮。
+  //   - 文档/其它文件 → GitHub API 渲染（README/.md/.rst/.org 着色，目录→列表）。
+  const lang = resolveLang(filePath);
+
+  if (lang) {
+    // 代码文件路径：raw 源码 + 仓库元数据并行请求。
+    const [raw, meta] = await Promise.all([
+      fetchRawSource(owner, repo, filePath),
+      fetchRepoMeta(owner, repo, token),
+    ]);
+    if (!raw.ok) {
+      const msg = raw.status === 404
+        ? `File not found: ${filePath} (404)`
+        : raw.status === 403
+        ? "GitHub rate limit exceeded (403) — set GITHUB_TOKEN to raise the limit"
+        : `GitHub raw fetch error (${raw.status})`;
+      return new Response(errorPage(owner, repo, filePath, msg), {
+        status: raw.status === 404 ? 404 : 502,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+    const { html: colored, plain } = await renderHighlighted(raw.text, lang, hljs);
+    const page = wrapCodePage(colored, lang, plain, owner, repo, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
+    return new Response(page, {
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
+    });
+  }
+
+  // 文档 / 其它文件路径：GitHub Contents API（含目录检测）。
   const [content, meta] = await Promise.all([
     fetchContent(owner, repo, filePath, token),
     fetchRepoMeta(owner, repo, token),
@@ -504,7 +765,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
     });
   }
 
-  // 文件（或默认 README）→ 渲染内容页。
+  // 文件（文档 / 默认 README）→ 渲染内容页 + Pygments 上色。
   const rewriter = buildRewriter(owner, repo);
 
   // HTMLRewriter 在 Workers 上是流式、零额外内存；
@@ -518,7 +779,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss) {
     bodyHtml = content.html;
   }
 
-  const page = wrapPage(bodyHtml, owner, repo, filePath, meta, waterCss);
+  const page = wrapDocPage(bodyHtml, owner, repo, filePath, meta, waterCss, pygmentsCss);
   return new Response(page, {
     headers: {
       "content-type": "text/html; charset=utf-8",

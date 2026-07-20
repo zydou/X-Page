@@ -36,6 +36,66 @@ jobs:
           console.log(`✓ artplayer.mjs generated (${src.length} bytes)`);
           '
 
+      # ---- Pygments 着色 CSS（README/.md 的 pl-xxx token）----
+      # 从 github-markdown-css 提取仅含 .pl-* 的规则，light 直接用、
+      # dark-dimmed 用 @media (prefers-color-scheme: dark) 包裹，合并成一个文件。
+      - name: Build pygments.css (pl- token colors, light + dark)
+        run: |
+          curl -fsSL https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.css -o pygments-light.css
+          curl -fsSL https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-dark-dimmed.css -o pygments-dark.css
+          node -e '
+          const fs = require("fs");
+          function extract(css) {
+            const out = [];
+            const re = /([^{}]*?\.pl-[a-z0-9]+(?:[^}]*?)?)\s*\{([^}]*)\}/g;
+            let m;
+            while ((m = re.exec(css)) !== null) {
+              const sel = m[1].replace(/\s+/g, " ").trim();
+              const body = m[2].trim();
+              if (!body) continue;
+              const decls = body.split(";").map(d=>d.trim()).filter(Boolean).join("; ");
+              out.push(`${sel} { ${decls}; }`);
+            }
+            return out.join("\n");
+          }
+          const light = extract(fs.readFileSync("pygments-light.css","utf8"));
+          const dark = extract(fs.readFileSync("pygments-dark.css","utf8"));
+          const out = `/* x-page Pygments token colors for GitHub-rendered README/.md (pl-xxx) */\n${light}\n@media (prefers-color-scheme: dark) {\n${dark}\n}\n`;
+          fs.writeFileSync("pygments.css", out);
+          console.log(`✓ pygments.css generated (${out.length} bytes)`);
+          '
+          npx esbuild pygments.css --minify --legal-comments=none --outdir=. --allow-overwrite
+
+      # ---- highlight.js Worker-side 渲染引擎（浏览器零 JS）----
+      # 把 core + 15 种核心语言模块拼接成一个 ES Module，暴露：
+      #   highlightCode(value, language)      — 内置语言直接高亮
+      #   highlightWith(value, language, src) — 按需语言：注册后高亮
+      #   BUILTIN_LANGS                       — 内置语言名 Set
+      #   HLJS_THEME_CSS                      — 主题 CSS（github + github-dark @media 包裹）
+      # 主题 CSS 与引擎打包在一起，github.js 把它注入 <style> 即可。
+      - name: Build highlight.mjs (core + 15 langs + theme)
+        run: |
+          set -e
+          curl -fsSL https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js -o highlight.min.js
+          mkdir -p build/languages
+          for lang in javascript typescript python go rust c cpp java ruby php bash sql json yaml markdown; do
+            curl -fsSL "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/${lang}.min.js" -o "build/languages/${lang}.min.js"
+          done
+          curl -fsSL https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github.min.css -o github.min.css
+          curl -fsSL https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github-dark.min.css -o github-dark.min.css
+          node -e '
+          const fs = require("fs");
+          const BUILTIN = ["javascript","typescript","python","go","rust","c","cpp","java","ruby","php","bash","sql","json","yaml","markdown"];
+          const core = fs.readFileSync("highlight.min.js","utf8");
+          const langs = BUILTIN.map(l => fs.readFileSync(`build/languages/${l}.min.js`,"utf8"));
+          const lightCss = fs.readFileSync("github.min.css","utf8");
+          const darkCss = fs.readFileSync("github-dark.min.css","utf8");
+          const themeCss = `${lightCss}\n@media (prefers-color-scheme: dark) {\n${darkCss}\n}`;
+          const out = `/*! x-page highlight.js bundle — Worker-side rendering, browser zero JS */\n${core}\n${langs.join("\n\n")}\nfunction escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}\nexport function highlightCode(value,language){try{return hljs.highlight(value,{language:language,ignoreIllegals:true}).value}catch(e){return escapeHtml(value)}}\nexport function highlightWith(value,language,source){try{new Function("hljs",source)(hljs);return hljs.highlight(value,{language:language,ignoreIllegals:true}).value}catch(e){return escapeHtml(value)}}\nexport const BUILTIN_LANGS=new Set(${JSON.stringify(BUILTIN)});\nexport const HLJS_THEME_CSS=${JSON.stringify(themeCss)};\n`;
+          fs.writeFileSync("highlight.mjs", out);
+          console.log(`✓ highlight.mjs generated (${out.length} bytes, ${BUILTIN.length} builtin langs)`);
+          '
+
       - name: Deploy
         uses: cloudflare/wrangler-action@v4
         with:
@@ -44,7 +104,7 @@ jobs:
       # wrangler 部署会重置 Worker Cache 运行时开关为默认值（禁用）。
       # 通过 endpoint /workers/scripts/{name}/settings（multipart form-data）重新启用
       # 文档: https://developers.cloudflare.com/api/resources/workers/subresources/scripts/subresources/script_and_version_settings/methods/edit/
-      # 注意：CLOUDFLARE_API_TOKEN 权限需要包含 Workers Scripts:Edit
+      # 注意：CLOUDFRE_API_TOKEN 权限需要包含 Workers Scripts:Edit
       - name: Re-enable Worker Cache
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

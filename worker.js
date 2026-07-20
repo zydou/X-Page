@@ -34,6 +34,16 @@ import ARTPLAYER_JS from "./artplayer.mjs";
 import WATER_CSS from "./water.css";
 import TWITTER_CSS from "./twitter.css";
 
+// GitHub 代码高亮（方案一：Worker 端渲染，浏览器零 JS）。
+// pygments.css：从 github-markdown-css 提取的 .pl-* token 着色规则，
+// light + dark 双主题，dark 用 @media (prefers-color-scheme: dark) 包裹，
+// 给 GitHub 已渲染好的 README/.md 里的 <span class="pl-xxx"> 上色。
+import PYGMENTS_CSS from "./pygments.css";
+// highlight.mjs：highlight.js core + 15 种核心语言模块打包成的 ES Module，
+// 暴露 highlightCode / highlightWith / BUILTIN_LANGS / HLJS_THEME_CSS。
+// Worker 端用 hljs.highlight() 纯函数直接产出着色好的静态 HTML，浏览器不跑任何 JS。
+import * as HLJS from "./highlight.mjs";
+
 // 各子路由 handler
 import { indexHtml } from "./routes/index.js";
 import { handleProxy } from "./routes/proxy.js";
@@ -103,7 +113,7 @@ export default {
 
     // GitHub README 自述页渲染（固定前缀 /github/，不会与推文兜底冲突）
     if (cleanPath === "github" || cleanPath.startsWith("github/")) {
-      return serveGithub(request, env, cleanPath, WATER_CSS);
+      return serveGithub(request, env, cleanPath, WATER_CSS, PYGMENTS_CSS, HLJS);
     }
 
     // 推文路由（兜底 — 因为 /<user>/status/<id> 形态最宽泛，需最后匹配）
