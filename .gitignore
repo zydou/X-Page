@@ -8,3 +8,5 @@ artplayer.js
 artplayer.mjs
 highlight.mjs
 markdown-it.mjs
+
+pygments.css
