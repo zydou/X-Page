@@ -36,35 +36,24 @@ jobs:
           console.log(`✓ artplayer.mjs generated (${src.length} bytes)`);
           '
 
-      # ---- Pygments 着色 CSS（README/.md 的 pl-xxx token）----
-      # 从 github-markdown-css 提取仅含 .pl-* 的规则，light 直接用、
-      # dark-dimmed 用 @media (prefers-color-scheme: dark) 包裹，合并成一个文件。
-      - name: Build pygments.css (pl- token colors, light + dark)
+      # ---- markdown-it（Worker 端 markdown → HTML 渲染器）----
+      # 用 esbuild 把 npm markdown-it 打成自包含 ESM，导出 MarkdownIt。
+      # lib/markdown.js import 它来渲染 README/.md 源码，代码块由 highlight.js 着色。
+      - name: Build markdown-it.mjs (GFM markdown renderer)
         run: |
-          curl -fsSL https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.css -o pygments-light.css
-          curl -fsSL https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-dark-dimmed.css -o pygments-dark.css
+          npm install markdown-it@14.1.0 --no-save
+          npx esbuild node_modules/markdown-it/index.mjs \
+            --bundle --format=esm --platform=node --minify \
+            --outfile=markdown-it.mjs
+          # 把 `export {Rt as default}` 改成命名导出 `MarkdownIt`
           node -e '
           const fs = require("fs");
-          function extract(css) {
-            const out = [];
-            const re = /([^{}]*?\.pl-[a-z0-9]+(?:[^}]*?)?)\s*\{([^}]*)\}/g;
-            let m;
-            while ((m = re.exec(css)) !== null) {
-              const sel = m[1].replace(/\s+/g, " ").trim();
-              const body = m[2].trim();
-              if (!body) continue;
-              const decls = body.split(";").map(d=>d.trim()).filter(Boolean).join("; ");
-              out.push(`${sel} { ${decls}; }`);
-            }
-            return out.join("\n");
-          }
-          const light = extract(fs.readFileSync("pygments-light.css","utf8"));
-          const dark = extract(fs.readFileSync("pygments-dark.css","utf8"));
-          const out = `/* x-page Pygments token colors for GitHub-rendered README/.md (pl-xxx) */\n${light}\n@media (prefers-color-scheme: dark) {\n${dark}\n}\n`;
-          fs.writeFileSync("pygments.css", out);
-          console.log(`✓ pygments.css generated (${out.length} bytes)`);
+          let src = fs.readFileSync("markdown-it.mjs","utf8");
+          src = src.replace(/export\{Rt as default\};?/, "export const MarkdownIt = Rt;");
+          fs.writeFileSync("markdown-it.mjs", src);
           '
-          npx esbuild pygments.css --minify --legal-comments=none --outdir=. --allow-overwrite
+          rm -rf node_modules package.json package-lock.json
+          echo "✓ markdown-it.mjs generated ($(wc -c < markdown-it.mjs) bytes)"
 
       # ---- highlight.js Worker-side 渲染引擎（浏览器零 JS）----
       # 把 core + 15 种核心语言模块拼接成一个 ES Module，暴露：

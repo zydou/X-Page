@@ -41,6 +41,7 @@
  */
 
 import { proxyUrl } from "../lib/utils.js";
+import { createMarkdownRenderer } from "../lib/markdown.js";
 
 const GITHUB_API = "https://api.github.com";
 const RAW_BASE = "https://raw.githubusercontent.com";
@@ -48,6 +49,9 @@ const HLJS_LANG_CDN = "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10
 
 // Worker 端语言模块内存缓存（同 isolate 内跨请求复用，叠加 cf 边缘缓存）。
 const LANG_MODULE_CACHE = new Map();
+
+// markdown 渲染器（首次 serveGithub 时惰性创建，绑定 hljs）。
+let markdownRenderer = null;
 
 // 代码文件最大源码长度：超出则退化为纯文本 <pre>，避免 Worker CPU 爆表。
 const CODE_MAX_CHARS = 200000;
@@ -270,9 +274,11 @@ async function fetchContent(owner, repo, filePath, token) {
   // 文件：raw accept 返回原始 markdown 源码
   if (!contentType.includes("application/json")) {
     const raw = await res.text();
-    // 把 raw markdown 走 GitHub /markdown/raw 端点渲染成 HTML
-    // 带 context（owner/repo）让 GitHub 正确解析仓库内相对链接
-    const html = await renderMarkdown(raw, owner, repo, token);
+    // 用 markdown-it（lib/markdown.js）渲染成 HTML，代码块由
+    // highlight.js 在 Worker 端着色。走 raw 而不是 github.html：
+    // github.html 会把 img src 转成 private-user-images 的 JWT URL
+    // （几分钟失效，但 HTML 缓存 5 分钟 → 图片死链）。
+    const html = renderMarkdown(raw);
     return { ok: true, status: 200, type: "file", html, contentType, listing: [] };
   }
 
@@ -286,39 +292,22 @@ async function fetchContent(owner, repo, filePath, token) {
 }
 
 /**
- * 把 raw markdown 源码通过 GitHub /markdown/raw 端点渲染成 HTML。
+ * 用 markdown-it 把 raw markdown 渲染成 HTML。
  *
- * 带 mode=gfm + context（owner/repo），让 GitHub 按 GFM 规范
- * 渲染（任务列表 / 表格 / 删除线），并正确解析仓库内相对链接。
- * 输出 HTML 里外部图走 camo 代理（稳定），user-attachments 保留
- * 干净 URL（无 JWT 过期问题）。
+ * markdown-it 实例在首次调用时惰性创建（需要 hljs，由 serveGithub
+ * 传入）。代码块通过 markdown-it 的 highlight 选项交给 hljs 着色：
+ * 语言被识别 → 返回已着色的 span HTML；未识别 → 返回空串，markdown-it
+ * 走默认转义并保留 language-xxx class。
  *
  * @param {string} raw raw markdown 源码
- * @param {string} owner
- * @param {string} repo
- * @param {string} [token]
- * @returns {Promise<string>} 渲染后的 HTML
+ * @returns {string} 渲染后的 HTML
  */
-async function renderMarkdown(raw, owner, repo, token) {
-  const headers = {
-    "Content-Type": "text/plain; charset=utf-8",
-    Accept: "application/vnd.github.html",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "x-page-worker (Cloudflare Worker; +https://github.com/)",
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(`${GITHUB_API}/markdown/raw`, {
-    method: "POST",
-    headers,
-    body: raw,
-    cf: { cacheTtl: 300, cacheEverything: true },
-  });
-  if (!res.ok) {
-    // 渲染失败时退回原始 markdown（escape 后塞进 <pre>，至少内容可读）
+function renderMarkdown(raw) {
+  if (!markdownRenderer) {
+    // 退化：hljs 未注入时直接 escape（理论上不会发生，serveGithub 总是传 hljs）
     return `<pre>${escapeHtml(raw)}</pre>`;
   }
-  return await res.text();
+  return markdownRenderer(raw);
 }
 
 /**
@@ -443,9 +432,8 @@ function renderTopbar(owner, repo, filePath, meta) {
  * 把 README 文档的 HTML 片断包裹为完整的、自包含的页面。
  *
  * 复用了原来的 .gh-topbar 布局；正文用 water.css 兜底排版；代码块 /
- * 表格 / 图片约束在容器宽度内。追加 pygments.css 让 GitHub 已渲染好的
- * <span class="pl-xxx"> token 在 light/dark 下都显示颜色（dark 用
- * @media (prefers-color-scheme: dark) 包裹）。
+ * 表格 / 图片约束在容器宽度内。注入 highlight.js 主题 CSS（github +
+ * github-dark，dark 用 @media (prefers-color-scheme: dark) 包裹）。
  *
  * @param {string} readmeHtml 已改写资源路径的 README body
  * @param {string} owner
@@ -453,10 +441,10 @@ function renderTopbar(owner, repo, filePath, meta) {
  * @param {string} filePath 文件路径（空串 = 默认 README）
  * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
  * @param {string} waterCss water.css 源码字符串
- * @param {string} pygmentsCss 提取的 .pl-* token 着色规则（含 dark @media）
+ * @param {string} themeCss highlight.js 主题 CSS（含 dark @media）
  * @returns {string} 完整 HTML 文档
  */
-function wrapDocPage(readmeHtml, owner, repo, filePath, meta, waterCss, pygmentsCss) {
+function wrapDocPage(readmeHtml, owner, repo, filePath, meta, waterCss, themeCss) {
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
   const safePath = escapeHtml(filePath);
@@ -496,8 +484,8 @@ function wrapDocPage(readmeHtml, owner, repo, filePath, meta, waterCss, pygments
     .markdown-body video, #readme video { max-width: 100%; }
     .markdown-body pre, #readme pre { overflow-x: auto; }
     .markdown-body table, #readme table { max-width: 100%; display: block; overflow-x: auto; }
-    /* Pygments token 着色（pl-xxx）：让 GitHub 已渲染好的 token 显示颜色，light + dark 自动切换 */
-    ${pygmentsCss}
+    /* highlight.js 主题（hljs-*）：代码块着色，light + dark 自动切换 */
+    ${themeCss}
     </style>
 </head>
 <body>
@@ -725,11 +713,16 @@ function formatCount(n) {
  * @param {Object} env wrangler 注入的环境变量（含可选 GITHUB_TOKEN）
  * @param {string} cleanPath 去首斜杠 + decode 后的路径，如 "github/iOfficeAI/OfficeCLI/npm/package.json"
  * @param {string} waterCss water.css 源码字符串
- * @param {string} pygmentsCss 提取的 .pl-* token 着色规则（含 dark @media）
  * @param {object} hljs highlight.mjs 命名空间 { highlightCode, highlightWith, BUILTIN_LANGS, HLJS_THEME_CSS }
  * @returns {Response}
  */
-export async function serveGithub(_request, env, cleanPath, waterCss, pygmentsCss, hljs) {
+export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
+  // 惰性创建 markdown 渲染器（首次请求时绑定 hljs）。
+  // 模块级变量，同 isolate 内跨请求复用。
+  if (!markdownRenderer && hljs) {
+    markdownRenderer = createMarkdownRenderer(hljs);
+  }
+
   const rest = cleanPath.slice("github/".length);
   if (!rest) return new Response("missing owner/repo", { status: 400 });
 
@@ -806,7 +799,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss, pygmentsCs
     });
   }
 
-  // 文件（文档 / 默认 README）→ 渲染内容页 + Pygments 上色。
+  // 文件（文档 / 默认 README）→ markdown-it 已着色 + HTMLRewriter 代理图片。
   const rewriter = buildRewriter(owner, repo);
 
   // HTMLRewriter 在 Workers 上是流式、零额外内存；
@@ -820,7 +813,8 @@ export async function serveGithub(_request, env, cleanPath, waterCss, pygmentsCs
     bodyHtml = content.html;
   }
 
-  const page = wrapDocPage(bodyHtml, owner, repo, filePath, meta, waterCss, pygmentsCss);
+  // 文档路径统一用 highlight.js 主题（代码块已在 Worker 端由 markdown-it 着色）
+  const page = wrapDocPage(bodyHtml, owner, repo, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
   return new Response(page, {
     headers: {
       "content-type": "text/html; charset=utf-8",
