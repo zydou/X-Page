@@ -3,25 +3,27 @@
  * ============================================================
  * GitHub README / 代码文件渲染：/github/<user>/<repo>[/<path>]
  *
- * 让 Worker 作为中立客户端调 GitHub Contents API，直接拿到
- * 仓库 README 的预渲染 HTML（markdown → HTML + 语法高亮已由
- * GitHub 完成），把里面的 <img>/<video>/<source> 改写为内部
- * /proxy/<encoded> 路径后套上 water.css 展示。
+ * 让 Worker 作为中立客户端调 GitHub Contents API，拉取仓库
+ * README / 指定文件的原始 markdown 源码，再走 GitHub 的
+ * /markdown/raw 端点渲染成 HTML（GFM 任务列表 / 表格 / 删除线
+ * 全部复用 GitHub 的产出），把里面的 <img>/<video>/<source>
+ * 改写为内部 /proxy/<encoded> 路径后套上 water.css 展示。
  *
  * 设计取舍：
- *   - 走 GitHub 预渲染 HTML 而不是自写 markdown 解析器：
- *     语法高亮 / 表格 / GFM 任务列表全部复用 GitHub 的产出，
- *     保真度高、体积小、维护成本低。
- *   - 单 API 调用：README 接口直接返回 HTML（Accept 头控制），
- *     不额外调 /repos 取 metadata。相对路径 asset 用
- *     raw.githubusercontent.com/{owner}/{repo}/HEAD/ 兜底解析，
- *     无需再查 default_branch，省下一次配额（无 token 时仅 60 次/h）。
- *   - 限流：通过 [vars] GITHUB_TOKEN 传入可选 token，未配置也能用
- *     （仅公共仓库，受未认证 60次/h 限制）。
+ *   - 走 raw 源码 + /markdown/raw 渲染，而不是 github.html accept：
+ *     github.html 会把 img src 转成 private-user-images 的 JWT URL，
+ *     JWT 几分钟失效但 HTML 缓存 5 分钟 → 图片变死链。raw 路线
+ *     下 GitHub 把外部图走 camo 代理（稳定），user-attachments
+ *     保留干净 URL（无 JWT），彻底解决图片过期问题。
+ *   - 双 API 调用（raw + markdown render），比 github.html 多一次，
+ *     但换来图片长期可用 + 代码块可后期加 highlight。
+ *     无 token 时受 60次/h 限制；配 GITHUB_TOKEN 提到 5000次/h。
+ *   - 相对路径 asset 用 raw.githubusercontent.com 兜底解析，
+ *     无需再查 default_branch，省下一次配额。
  *
  * 文件类型分流（方案一）：
- *   - 文档（.md/.rst/.org 等）：保持 GitHub API 渲染流程；
- *     README HTML 里已有 Pygments token <span class="pl-xxx">，
+ *   - 文档（.md/.rst/.org 等）：拉 raw 源码 → /markdown/raw 渲染；
+ *     输出 HTML 里已有 Pygments token <span class="pl-xxx">，
  *     追加 pygments.css（light + dark，dark 用 @media 包裹）上色。
  *   - 代码文件（.ts/.py/.go …）：拉 raw 源码，Worker 端用
  *     highlight.js 的 hljs.highlight() 纯函数直接产出着色好的
@@ -242,7 +244,10 @@ async function fetchRepoMeta(owner, repo, token) {
  */
 async function fetchContent(owner, repo, filePath, token) {
   const headers = {
-    Accept: "application/vnd.github.html",
+    // 走 raw 而不是 github.html：github.html 会把 img src 转成
+    // private-user-images 的 JWT URL（几分钟失效，但 HTML 缓存 5 分钟
+    // → 图片死链）。raw 路线下 /markdown/raw 渲染保留干净 URL。
+    Accept: "application/vnd.github.raw",
     "X-GitHub-Api-Version": "2022-11-28",
     // GitHub API 强制要求 User-Agent，否则 403
     "User-Agent": "x-page-worker (Cloudflare Worker; +https://github.com/)",
@@ -262,22 +267,58 @@ async function fetchContent(owner, repo, filePath, token) {
   if (!res.ok) return { ok: false, status: res.status, type: "error", html: "", contentType: "", listing: [] };
   const contentType = res.headers.get("content-type") || "";
 
-  // 文件：html accept 返回渲染好的 HTML
-  if (contentType.includes("html")) {
-    return { ok: true, status: 200, type: "file", html: await res.text(), contentType, listing: [] };
+  // 文件：raw accept 返回原始 markdown 源码
+  if (!contentType.includes("application/json")) {
+    const raw = await res.text();
+    // 把 raw markdown 走 GitHub /markdown/raw 端点渲染成 HTML
+    // 带 context（owner/repo）让 GitHub 正确解析仓库内相对链接
+    const html = await renderMarkdown(raw, owner, repo, token);
+    return { ok: true, status: 200, type: "file", html, contentType, listing: [] };
   }
 
-  // 目录：GitHub 对目录返回 JSON 数组（即便请求了 html accept）
-  if (contentType.includes("application/json")) {
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      return { ok: true, status: 200, type: "dir", html: "", contentType, listing: data };
-    }
-    // 非数组的 JSON（如二进制文件的 403 错误信息）→ 无法 html 渲染
-    return { ok: false, status: res.status, type: "error", html: "", contentType, listing: [] };
+  // 目录：GitHub 对目录返回 JSON 数组
+  const data = await res.json();
+  if (Array.isArray(data)) {
+    return { ok: true, status: 200, type: "dir", html: "", contentType, listing: data };
   }
-
+  // 非数组的 JSON（如二进制文件的 403 错误信息）→ 无法渲染
   return { ok: false, status: res.status, type: "error", html: "", contentType, listing: [] };
+}
+
+/**
+ * 把 raw markdown 源码通过 GitHub /markdown/raw 端点渲染成 HTML。
+ *
+ * 带 mode=gfm + context（owner/repo），让 GitHub 按 GFM 规范
+ * 渲染（任务列表 / 表格 / 删除线），并正确解析仓库内相对链接。
+ * 输出 HTML 里外部图走 camo 代理（稳定），user-attachments 保留
+ * 干净 URL（无 JWT 过期问题）。
+ *
+ * @param {string} raw raw markdown 源码
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} [token]
+ * @returns {Promise<string>} 渲染后的 HTML
+ */
+async function renderMarkdown(raw, owner, repo, token) {
+  const headers = {
+    "Content-Type": "text/plain; charset=utf-8",
+    Accept: "application/vnd.github.html",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "x-page-worker (Cloudflare Worker; +https://github.com/)",
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${GITHUB_API}/markdown/raw`, {
+    method: "POST",
+    headers,
+    body: raw,
+    cf: { cacheTtl: 300, cacheEverything: true },
+  });
+  if (!res.ok) {
+    // 渲染失败时退回原始 markdown（escape 后塞进 <pre>，至少内容可读）
+    return `<pre>${escapeHtml(raw)}</pre>`;
+  }
+  return await res.text();
 }
 
 /**
