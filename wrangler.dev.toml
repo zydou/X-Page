@@ -1,0 +1,34 @@
+compatibility_date = "2026-07-01"
+main = "worker.js"
+name = "x-dev"
+preview_urls = false
+
+# Text module rules：把 .css 文件作为纯文本字符串导入 worker.js，
+# 内联到最终 HTML 的 <style> 标签里，彻底消除外部引用，
+# 让每条路由渲染的页面都完全自包含、不受混合内容拦截。
+rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
+
+[vars]
+TIMEZONE = "Asia/Shanghai"
+TRANSLATE_TO = "zh-cn"
+# User-Agent 覆盖：/html/ 路由抓取时的 UA。
+# 默认使用 iOS 微信内置浏览器 UA，用于绕过微信公众号白名单。
+UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.73(0x18004939) NetType/WIFI Language/zh_CN"
+# GITHUB_TOKEN 以 Worker Secret 形式存储（wrangler secret put GITHUB_TOKEN），
+# 不再以明文 var 形式保存。运行时仍通过 env.GITHUB_TOKEN 读取，代码无需改动。
+
+# Enable logs
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+persist = true
+head_sampling_rate = 1

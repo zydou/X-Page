@@ -128,17 +128,24 @@ function shouldProxy(url) {
 
 /**
  * 把可能为相对路径的 URL 解析为绝对 URL。
- * base 取 raw.githubusercontent.com 的 HEAD 分支兜底路径，
+ * base 取 raw.githubusercontent.com 的 HEAD 分支 + 文件所在目录，
  * 让 assets/foo.png 这类仓库内相对引用也能解析。
+ *
+ * 文件目录的作用：markdown 在子目录时（如 readme/README.zh-CN.md），
+ * 里面的 ../assets/x.png 是相对文件位置解析的。若 base 只用仓库根
+ * （{RAW_BASE}/{owner}/{repo}/HEAD/），../ 会把 HEAD/ 这一层吃掉，
+ * 导致分支名丢失 → raw 404。所以 base 必须包含文件所在目录。
  *
  * @param {string} url
  * @param {string} owner
  * @param {string} repo
+ * @param {string} filePath 文件路径（可为空 → 默认 README 在根目录）
  * @returns {string}
  */
-function resolveUrl(url, owner, repo) {
+function resolveUrl(url, owner, repo, filePath) {
+  const fileDir = filePath ? filePath.slice(0, filePath.lastIndexOf("/") + 1) : "";
   try {
-    return new URL(url, `${RAW_BASE}/${owner}/${repo}/HEAD/`).href;
+    return new URL(url, `${RAW_BASE}/${owner}/${repo}/HEAD/${fileDir}`).href;
   } catch {
     return url;
   }
@@ -154,9 +161,10 @@ function resolveUrl(url, owner, repo) {
  *
  * @param {string} owner
  * @param {string} repo
+ * @param {string} filePath 文件路径（可为空 → 默认 README 在根目录）
  * @returns {HTMLRewriter}
  */
-function buildRewriter(owner, repo) {
+function buildRewriter(owner, repo, filePath) {
   const rewriter = new HTMLRewriter();
 
   function proxyImgSrc(imgEl) {
@@ -167,14 +175,14 @@ function buildRewriter(owner, repo) {
     const src = imgEl.getAttribute("src");
     const raw = canonical || src;
     if (!shouldProxy(raw)) return;
-    const absolute = resolveUrl(raw, owner, repo);
+    const absolute = resolveUrl(raw, owner, repo, filePath);
     imgEl.setAttribute("src", proxyUrl(absolute));
   }
 
   function proxyMediaSrc(el) {
     const src = el.getAttribute("src");
     if (!shouldProxy(src)) return;
-    el.setAttribute("src", proxyUrl(resolveUrl(src, owner, repo)));
+    el.setAttribute("src", proxyUrl(resolveUrl(src, owner, repo, filePath)));
   }
 
   // <a>：仅改写相对路径的资源链接为 /proxy/<resolved>，
@@ -185,7 +193,7 @@ function buildRewriter(owner, repo) {
     const href = el.getAttribute("href");
     if (!shouldProxy(href)) return;
     if (/^https?:\/\//i.test(href.trim())) return;
-    el.setAttribute("href", proxyUrl(resolveUrl(href, owner, repo)));
+    el.setAttribute("href", proxyUrl(resolveUrl(href, owner, repo, filePath)));
   }
 
   rewriter.on("img", { element: proxyImgSrc });
@@ -800,7 +808,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
   }
 
   // 文件（文档 / 默认 README）→ markdown-it 已着色 + HTMLRewriter 代理图片。
-  const rewriter = buildRewriter(owner, repo);
+  const rewriter = buildRewriter(owner, repo, filePath);
 
   // HTMLRewriter 在 Workers 上是流式、零额外内存；
   // 失败时降级返回原始 HTML（资源不走代理，至少内容可读）。
