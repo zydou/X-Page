@@ -112,11 +112,27 @@ fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n
 
 ### Deploy & Test
 
-**Always deploy and verify directly via `npx wrangler deploy`** — do NOT wait for the GitHub Actions `Deploy` workflow to pass.
-The CI workflow is frequently slow / queued for minutes and is not a reliable gate.
+**Two-stage deploy: debug worker first, then production.**
+
+1. **Debug stage** — create a separate `x-dev` Worker for testing changes:
+   ```bash
+   # Copy wrangler.toml → wrangler.dev.toml, change name to "x-dev" and route to a dev hostname
+   npx wrangler deploy --config wrangler.dev.toml
+   ```
+   Verify every route on the dev hostname before touching production.
+
+2. **Production stage** — only after dev passes:
+   ```bash
+   npx wrangler deploy
+   ```
+
+**Do NOT wait for the GitHub Actions `Deploy` workflow to pass** — it is frequently slow / queued for minutes and is not a reliable gate. Deploy via Wrangler directly for both stages.
 
 ```bash
-# Deploy directly (overrides CI for speed & reliability)
+# Debug on x-dev first
+npx wrangler deploy --config wrangler.dev.toml
+
+# Then deploy to production
 npx wrangler deploy
 
 # Verify each route against the live edge:
