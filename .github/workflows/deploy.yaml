@@ -17,13 +17,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     name: Deploy
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@main
 
       - name: Deploy
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy
 
       # wrangler 部署会重置 Worker Cache 运行时开关为默认值（禁用）。
       # 通过 endpoint /workers/scripts/{name}/settings（multipart form-data）重新启用
