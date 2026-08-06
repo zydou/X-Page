@@ -76,12 +76,8 @@ None of these files are committed; CI fetches and transforms them before deploy.
 
 ### CI Pipeline (`.github/workflows/deploy.yaml`)
 
-1. `curl` downloads `water.css` from jsdelivr.
-2. `npx esbuild *.css --minify` rewrites both CSS assets in place.
-3. `curl` downloads `artplayer.js` from jsdelivr, then a Node one-liner wraps it as `artplayer.mjs` containing `export default "<stringified source>"` —
-   `JSON.stringify` automatically escapes backticks, `${`, backslashes, etc.
-4. `cloudflare/wrangler-action@v4` deploys.
-5. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
+1. `npx wrangler deploy` — Wrangler runs the `[build]` command (`sh build.sh`) first, which downloads and builds all remote assets (CSS, artplayer, markdown-it, highlight.js), then deploys.
+2. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
 
 Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
 
@@ -97,17 +93,9 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrang
 ### Local Development
 
 ```bash
-# Download CSS and minify both CSS assets
-curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css -o water.css
-npx esbuild *.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
-
-# Download artplayer.js and wrap as ES module (so backticks/${} in source stay escaped)
-curl -fsSL https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js -o artplayer.js
-node -e '
-const fs = require("fs");
-const src = fs.readFileSync("artplayer.js", "utf8");
-fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n");
-'
+# Download & build all remote assets (CSS, JS), then start dev server
+sh build.sh
+npx wrangler dev
 ```
 
 ### Deploy & Test

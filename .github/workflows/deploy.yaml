@@ -11,6 +11,7 @@ on:
       - lib/**
       - twitter.css
       - wrangler.toml
+      - build.sh
 
 jobs:
   deploy:
@@ -18,72 +19,6 @@ jobs:
     name: Deploy
     steps:
       - uses: actions/checkout@main
-
-      - name: Fetch & Minify CSS
-        run: |
-          curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css -o water.css
-          npx esbuild *.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
-
-      # 拉取 artplayer.js 并包装为 ES Module（export default 字符串）。
-      # 用 JSON.stringify 转义能安全处理源码里出现的反引号 / 反斜杠。
-      - name: Wrap artplayer.js as ES module
-        run: |
-          curl -fsSL https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js -o artplayer.js
-          node -e '
-          const fs = require("fs");
-          const src = fs.readFileSync("artplayer.js", "utf8");
-          fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n");
-          console.log(`✓ artplayer.mjs generated (${src.length} bytes)`);
-          '
-
-      # ---- markdown-it（Worker 端 markdown → HTML 渲染器）----
-      # 用 esbuild 把 npm markdown-it 打成自包含 ESM，导出 MarkdownIt。
-      # lib/markdown.js import 它来渲染 README/.md 源码，代码块由 highlight.js 着色。
-      - name: Build markdown-it.mjs (GFM markdown renderer)
-        run: |
-          npm install markdown-it@14.1.0 --no-save
-          npx esbuild node_modules/markdown-it/index.mjs \
-            --bundle --format=esm --platform=node --minify \
-            --outfile=markdown-it.mjs
-          # 把 `export {Rt as default}` 改成命名导出 `MarkdownIt`
-          node -e '
-          const fs = require("fs");
-          let src = fs.readFileSync("markdown-it.mjs","utf8");
-          src = src.replace(/export\{Rt as default\};?/, "export const MarkdownIt = Rt;");
-          fs.writeFileSync("markdown-it.mjs", src);
-          '
-          rm -rf node_modules package.json package-lock.json
-          echo "✓ markdown-it.mjs generated ($(wc -c < markdown-it.mjs) bytes)"
-
-      # ---- highlight.js Worker-side 渲染引擎（浏览器零 JS）----
-      # 把 core + 15 种核心语言模块拼接成一个 ES Module，暴露：
-      #   highlightCode(value, language)      — 内置语言直接高亮
-      #   highlightWith(value, language, src) — 按需语言：注册后高亮
-      #   BUILTIN_LANGS                       — 内置语言名 Set
-      #   HLJS_THEME_CSS                      — 主题 CSS（github + github-dark @media 包裹）
-      # 主题 CSS 与引擎打包在一起，github.js 把它注入 <style> 即可。
-      - name: Build highlight.mjs (core + 15 langs + theme)
-        run: |
-          set -e
-          curl -fsSL https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js -o highlight.min.js
-          mkdir -p build/languages
-          for lang in javascript typescript python go rust c cpp java ruby php bash sql json yaml markdown; do
-            curl -fsSL "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/${lang}.min.js" -o "build/languages/${lang}.min.js"
-          done
-          curl -fsSL https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github.min.css -o github.min.css
-          curl -fsSL https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github-dark.min.css -o github-dark.min.css
-          node -e '
-          const fs = require("fs");
-          const BUILTIN = ["javascript","typescript","python","go","rust","c","cpp","java","ruby","php","bash","sql","json","yaml","markdown"];
-          const core = fs.readFileSync("highlight.min.js","utf8");
-          const langs = BUILTIN.map(l => fs.readFileSync(`build/languages/${l}.min.js`,"utf8"));
-          const lightCss = fs.readFileSync("github.min.css","utf8");
-          const darkCss = fs.readFileSync("github-dark.min.css","utf8");
-          const themeCss = `${lightCss}\n@media (prefers-color-scheme: dark) {\n${darkCss}\n}`;
-          const out = `/*! x-page highlight.js bundle — Worker-side rendering, browser zero JS */\n${core}\n${langs.join("\n\n")}\nfunction escapeHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}\nexport function highlightCode(value,language){try{return hljs.highlight(value,{language:language,ignoreIllegals:true}).value}catch(e){return escapeHtml(value)}}\nexport function highlightWith(value,language,source){try{new Function("hljs",source)(hljs);return hljs.highlight(value,{language:language,ignoreIllegals:true}).value}catch(e){return escapeHtml(value)}}\nexport const BUILTIN_LANGS=new Set(${JSON.stringify(BUILTIN)});\nexport const HLJS_THEME_CSS=${JSON.stringify(themeCss)};\n`;
-          fs.writeFileSync("highlight.mjs", out);
-          console.log(`✓ highlight.mjs generated (${out.length} bytes, ${BUILTIN.length} builtin langs)`);
-          '
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v4
