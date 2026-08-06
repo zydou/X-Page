@@ -109,7 +109,7 @@ export default {
 
     // GitHub README 自述页渲染（固定前缀 /github/，不会与推文兜底冲突）
     if (cleanPath === "github" || cleanPath.startsWith("github/")) {
-      return serveGithub(request, env, cleanPath, WATER_CSS, HLJS);
+      return serveGithub(request, env, cleanPath, u.pathname, WATER_CSS, HLJS);
     }
 
     // 推文路由（兜底 — 因为 /<user>/status/<id> 形态最宽泛，需最后匹配）

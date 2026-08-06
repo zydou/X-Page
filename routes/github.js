@@ -128,24 +128,25 @@ function shouldProxy(url) {
 
 /**
  * 把可能为相对路径的 URL 解析为绝对 URL。
- * base 取 raw.githubusercontent.com 的 HEAD 分支 + 文件所在目录，
+ * base 取 raw.githubusercontent.com 的指定分支 + 文件所在目录，
  * 让 assets/foo.png 这类仓库内相对引用也能解析。
  *
  * 文件目录的作用：markdown 在子目录时（如 readme/README.zh-CN.md），
  * 里面的 ../assets/x.png 是相对文件位置解析的。若 base 只用仓库根
- * （{RAW_BASE}/{owner}/{repo}/HEAD/），../ 会把 HEAD/ 这一层吃掉，
+ * （{RAW_BASE}/{owner}/{repo}/{ref}/），../ 会把 {ref}/ 这一层吃掉，
  * 导致分支名丢失 → raw 404。所以 base 必须包含文件所在目录。
  *
  * @param {string} url
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath 文件路径（可为空 → 默认 README 在根目录）
  * @returns {string}
  */
-function resolveUrl(url, owner, repo, filePath) {
+function resolveUrl(url, owner, repo, ref, filePath) {
   const fileDir = filePath ? filePath.slice(0, filePath.lastIndexOf("/") + 1) : "";
   try {
-    return new URL(url, `${RAW_BASE}/${owner}/${repo}/HEAD/${fileDir}`).href;
+    return new URL(url, `${RAW_BASE}/${owner}/${repo}/${ref}/${fileDir}`).href;
   } catch {
     return url;
   }
@@ -161,10 +162,11 @@ function resolveUrl(url, owner, repo, filePath) {
  *
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath 文件路径（可为空 → 默认 README 在根目录）
  * @returns {HTMLRewriter}
  */
-function buildRewriter(owner, repo, filePath) {
+function buildRewriter(owner, repo, ref, filePath) {
   const rewriter = new HTMLRewriter();
 
   function proxyImgSrc(imgEl) {
@@ -175,14 +177,14 @@ function buildRewriter(owner, repo, filePath) {
     const src = imgEl.getAttribute("src");
     const raw = canonical || src;
     if (!shouldProxy(raw)) return;
-    const absolute = resolveUrl(raw, owner, repo, filePath);
+    const absolute = resolveUrl(raw, owner, repo, ref, filePath);
     imgEl.setAttribute("src", proxyUrl(absolute));
   }
 
   function proxyMediaSrc(el) {
     const src = el.getAttribute("src");
     if (!shouldProxy(src)) return;
-    el.setAttribute("src", proxyUrl(resolveUrl(src, owner, repo, filePath)));
+    el.setAttribute("src", proxyUrl(resolveUrl(src, owner, repo, ref, filePath)));
   }
 
   // <a>：仅改写相对路径的资源链接为 /proxy/<resolved>，
@@ -193,7 +195,7 @@ function buildRewriter(owner, repo, filePath) {
     const href = el.getAttribute("href");
     if (!shouldProxy(href)) return;
     if (/^https?:\/\//i.test(href.trim())) return;
-    el.setAttribute("href", proxyUrl(resolveUrl(href, owner, repo, filePath)));
+    el.setAttribute("href", proxyUrl(resolveUrl(href, owner, repo, ref, filePath)));
   }
 
   rewriter.on("img", { element: proxyImgSrc });
@@ -250,11 +252,12 @@ async function fetchRepoMeta(owner, repo, token) {
  *
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA（默认 HEAD）
  * @param {string} filePath 文件路径（可为空 → 默认 README）
  * @param {string} [token] 可选的 GITHUB_TOKEN（pat），提升限流配额
  * @returns {{ ok, status, type: "file"|"dir"|"error", html, contentType, listing }}
  */
-async function fetchContent(owner, repo, filePath, token) {
+async function fetchContent(owner, repo, ref, filePath, token) {
   const headers = {
     // 走 raw 而不是 github.html：github.html 会把 img src 转成
     // private-user-images 的 JWT URL（几分钟失效，但 HTML 缓存 5 分钟
@@ -266,10 +269,13 @@ async function fetchContent(owner, repo, filePath, token) {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  // ref 非 HEAD 时追加 ?ref= 参数，让 API 在指定分支上查找文件。
+  const refParam = ref !== "HEAD" ? `?ref=${encodeURIComponent(ref)}` : "";
+
   // 空路径 → 默认 README；非空 → 指定路径
   const url = filePath
-    ? `${GITHUB_API}/repos/${owner}/${repo}/contents/${filePath}`
-    : `${GITHUB_API}/repos/${owner}/${repo}/readme`;
+    ? `${GITHUB_API}/repos/${owner}/${repo}/contents/${filePath}${refParam}`
+    : `${GITHUB_API}/repos/${owner}/${repo}/readme${refParam}`;
 
   const res = await fetch(url, {
     headers,
@@ -321,17 +327,18 @@ function renderMarkdown(raw) {
 /**
  * 拉取代码文件的 raw 源码（ Worker 端高亮用）。
  *
- * 走 raw.githubusercontent.com/{owner}/{repo}/HEAD/{path}，拿到纯文本源码。
+ * 走 raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}，拿到纯文本源码。
  * 代码文件不该走 GitHub API 的 html accept（会返回 <div class="plain"><pre>
  * 纯文本，无高亮），所以单独拉 raw。
  *
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath
  * @returns {{ ok: boolean, status: number, text: string }}
  */
-async function fetchRawSource(owner, repo, filePath) {
-  const url = `${RAW_BASE}/${owner}/${repo}/HEAD/${filePath}`;
+async function fetchRawSource(owner, repo, ref, filePath) {
+  const url = `${RAW_BASE}/${owner}/${repo}/${ref}/${filePath}`;
   const res = await fetch(url, {
     headers: {
       Accept: "text/plain, text/*, */*",
@@ -400,19 +407,21 @@ async function renderHighlighted(source, language, hljs) {
  *
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath
  * @param {object} meta
  * @returns {string} .gh-topbar 片段
  */
-function renderTopbar(owner, repo, filePath, meta) {
+function renderTopbar(owner, repo, ref, filePath, meta) {
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
+  const safeRef = escapeHtml(ref);
   const safePath = escapeHtml(filePath);
   const avatarUrl = meta?.avatarUrl ? proxyUrl(meta.avatarUrl) : "";
 
   const pathDisplay = filePath
-    ? `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/blob/HEAD/${safePath}" target="_blank">${safePath}</a>`
+    ? `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/blob/${safeRef}/${safePath}" target="_blank">${safePath}</a>`
     : `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>`;
 
   const avatarTag = avatarUrl
@@ -446,13 +455,14 @@ function renderTopbar(owner, repo, filePath, meta) {
  * @param {string} readmeHtml 已改写资源路径的 README body
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath 文件路径（空串 = 默认 README）
  * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
  * @param {string} waterCss water.css 源码字符串
  * @param {string} themeCss highlight.js 主题 CSS（含 dark @media）
  * @returns {string} 完整 HTML 文档
  */
-function wrapDocPage(readmeHtml, owner, repo, filePath, meta, waterCss, themeCss) {
+function wrapDocPage(readmeHtml, owner, repo, ref, filePath, meta, waterCss, themeCss) {
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
   const safePath = escapeHtml(filePath);
@@ -497,7 +507,7 @@ function wrapDocPage(readmeHtml, owner, repo, filePath, meta, waterCss, themeCss
     </style>
 </head>
 <body>
-    ${renderTopbar(owner, repo, filePath, meta)}
+    ${renderTopbar(owner, repo, ref, filePath, meta)}
     <div id="readme" class="markdown-body">
         ${readmeHtml}
     </div>
@@ -517,13 +527,14 @@ function wrapDocPage(readmeHtml, owner, repo, filePath, meta, waterCss, themeCss
  * @param {boolean} plain 是否退化为纯文本（超长 / 失败）
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath
  * @param {string} meta
  * @param {string} waterCss
  * @param {string} themeCss github + github-dark 主题（dark 已用 @media 包裹）
  * @returns {string} 完整 HTML 文档
  */
-function wrapCodePage(colored, language, plain, owner, repo, filePath, meta, waterCss, themeCss) {
+function wrapCodePage(colored, language, plain, owner, repo, ref, filePath, meta, waterCss, themeCss) {
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
   const safePath = escapeHtml(filePath);
@@ -562,7 +573,7 @@ function wrapCodePage(colored, language, plain, owner, repo, filePath, meta, wat
     </style>
 </head>
 <body>
-    ${renderTopbar(owner, repo, filePath, meta)}
+    ${renderTopbar(owner, repo, ref, filePath, meta)}
     <div class="gh-code"><pre><code${codeClass}>${colored}</code></pre></div>
 </body>
 </html>`;
@@ -574,20 +585,26 @@ function wrapCodePage(colored, language, plain, owner, repo, filePath, meta, wat
  * @param {Array} listing GitHub Contents API 返回的目录项数组
  * @param {string} owner
  * @param {string} repo
+ * @param {string} ref 分支/tag/commit SHA
  * @param {string} dirPath 当前目录路径（空串 = 根目录）
  * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
  * @param {string} waterCss water.css 源码字符串
  * @returns {string} 完整 HTML 文档
  */
-function renderDirListing(listing, owner, repo, dirPath, meta, waterCss) {
+function renderDirListing(listing, owner, repo, ref, dirPath, meta, waterCss) {
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
+  const safeRefUrl = encodeURIComponent(ref);
   const avatarUrl = meta?.avatarUrl ? proxyUrl(meta.avatarUrl) : "";
 
+  // 非默认分支时，目录链接前缀包含 @ref（如 /github/user/repo/@develop/src/）。
+  const refPrefix = ref !== "HEAD" ? `@${safeRefUrl}/` : "";
+
   // 头部路径：根目录显示 user/repo，子目录显示 user/repo/path。
+  // 分支链接到 GitHub 对应分支的 tree。
   const pathDisplay = dirPath
-    ? `<a href="/github/${safeOwner}/${safeRepo}">${safeOwner}/${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/tree/HEAD/${escapeHtml(dirPath)}" target="_blank">${escapeHtml(dirPath)}</a>`
+    ? `<a href="/github/${safeOwner}/${safeRepo}/${refPrefix}">${safeOwner}/${safeRepo}</a><span class="gh-sep">/</span><a href="${repoUrl}/tree/${safeRefUrl}/${escapeHtml(dirPath)}" target="_blank">${escapeHtml(dirPath)}</a>`
     : `<a href="https://github.com/${safeOwner}" target="_blank">${safeOwner}</a><span class="gh-sep">/</span><a href="${repoUrl}" target="_blank">${safeRepo}</a>`;
 
   const avatarTag = avatarUrl
@@ -601,8 +618,8 @@ function renderDirListing(listing, owner, repo, dirPath, meta, waterCss) {
     parentParts.pop();
     const parentPath = parentParts.join("/");
     const parentHref = parentPath
-      ? `/github/${safeOwner}/${safeRepo}/${parentPath}`
-      : `/github/${safeOwner}/${safeRepo}`;
+      ? `/github/${safeOwner}/${safeRepo}/${refPrefix}${parentPath}`
+      : `/github/${safeOwner}/${safeRepo}/${refPrefix}`;
     parentLink = `<a href="${parentHref}" class="gh-dir-parent">..</a>`;
   }
 
@@ -612,7 +629,7 @@ function renderDirListing(listing, owner, repo, dirPath, meta, waterCss) {
 
   const renderItem = (item) => {
     const name = escapeHtml(item.name);
-    const href = `/github/${safeOwner}/${safeRepo}/${(dirPath ? dirPath + "/" : "") + item.name}`;
+    const href = `/github/${safeOwner}/${safeRepo}/${refPrefix}${(dirPath ? dirPath + "/" : "") + item.name}`;
     const icon = item.type === "dir" ? "📁" : "📄";
     const size = item.type === "file" ? `<span class="gh-dir-size">${formatSize(item.size)}</span>` : "";
     return `<a href="${href}" class="gh-dir-item"><span class="gh-dir-icon">${icon}</span> ${name}${size}</a>`;
@@ -711,20 +728,27 @@ function formatCount(n) {
 }
 
 /**
- * 处理 /github/<user>/<repo>[/<path>] 请求。
+ * 处理 /github/<user>/<repo>[/@<ref>[/<path>]] 请求。
  *
  * 路径形态：
- *   /github/<user>/<repo>            → 默认 README
- *   /github/<user>/<repo>/<path>     → 指定文件（文档/代码）或目录（文件列表）
+ *   /github/<user>/<repo>                     → 默认分支 README
+ *   /github/<user>/<repo>/<path>              → 默认分支指定文件/目录
+ *   /github/<user>/<repo>/@<ref>              → 指定分支 README
+ *   /github/<user>/<repo>/@<ref>/<path>       → 指定分支文件/目录
  *
- * @param {Request} _request 入站请求（本路由仅从路径取参数，未使用 request 体）
+ * ref 可以是分支名、tag 或 commit SHA。
+ * 分支名含 / 时需 URL 编码（如 feat%2Fserver_team），
+ * 检测 @ 在原始路径（rawPathname）上完成，确保编码保留。
+ *
+ * @param {Request} _request 入站请求
  * @param {Object} env wrangler 注入的环境变量（含可选 GITHUB_TOKEN）
  * @param {string} cleanPath 去首斜杠 + decode 后的路径，如 "github/iOfficeAI/OfficeCLI/npm/package.json"
+ * @param {string} rawPathname 原始路径（未 decode），用于检测 @ref 中的 %2F
  * @param {string} waterCss water.css 源码字符串
  * @param {object} hljs highlight.mjs 命名空间 { highlightCode, highlightWith, BUILTIN_LANGS, HLJS_THEME_CSS }
  * @returns {Response}
  */
-export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
+export async function serveGithub(_request, env, cleanPath, rawPathname, waterCss, hljs) {
   // 惰性创建 markdown 渲染器（首次请求时绑定 hljs）。
   // 模块级变量，同 isolate 内跨请求复用。
   if (!markdownRenderer && hljs) {
@@ -739,7 +763,30 @@ export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
   const owner = parts[0];
   const repo = (parts[1] || "").split(/[/?#]/)[0];
   if (!owner || !repo) return new Response("missing owner/repo", { status: 400 });
-  const filePath = parts.slice(2).join("/").split(/[?#]/)[0];
+  let filePath = parts.slice(2).join("/").split(/[?#]/)[0];
+
+  // 从原始路径（rawPathname，未 decodeURIComponent）检测 @ref。
+  // 原始路径保留 %2F，因此分支名含 /（如 feat%2Fserver_team）在 rawParts 中
+  // 仍是一个整体段位，不会被 / 错误分割。
+  let ref = "HEAD";
+  const rawRest = rawPathname.replace(/^\//, "").slice("github/".length);
+  const rawParts = rawRest.split("/");
+  const thirdSeg = rawParts[2] || "";
+  if (thirdSeg.startsWith("@")) {
+    try {
+      ref = decodeURIComponent(thirdSeg.slice(1));
+    } catch {
+      ref = thirdSeg.slice(1);
+    }
+    if (!ref) ref = "HEAD";
+    // 文件路径从 @ref 之后的段位重建（原始路径保留编码），再 decode。
+    const rawFilePath = rawParts.slice(3).join("/").split(/[?#]/)[0];
+    try {
+      filePath = decodeURIComponent(rawFilePath);
+    } catch {
+      filePath = rawFilePath;
+    }
+  }
 
   // 路径穿越防护：拒绝含 ".." 的段位（GitHub 自身也返回 404，但显式拦截更安全）。
   if (filePath.split("/").some((seg) => seg === "..")) {
@@ -756,7 +803,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
   if (lang) {
     // 代码文件路径：raw 源码 + 仓库元数据并行请求。
     const [raw, meta] = await Promise.all([
-      fetchRawSource(owner, repo, filePath),
+      fetchRawSource(owner, repo, ref, filePath),
       fetchRepoMeta(owner, repo, token),
     ]);
     if (!raw.ok) {
@@ -771,7 +818,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
       });
     }
     const { html: colored, plain } = await renderHighlighted(raw.text, lang, hljs);
-    const page = wrapCodePage(colored, lang, plain, owner, repo, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
+    const page = wrapCodePage(colored, lang, plain, owner, repo, ref, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
     return new Response(page, {
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
     });
@@ -779,7 +826,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
 
   // 文档 / 其它文件路径：GitHub Contents API（含目录检测）。
   const [content, meta] = await Promise.all([
-    fetchContent(owner, repo, filePath, token),
+    fetchContent(owner, repo, ref, filePath, token),
     fetchRepoMeta(owner, repo, token),
   ]);
 
@@ -801,14 +848,14 @@ export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
 
   // 目录 → 渲染文件列表页。
   if (content.type === "dir") {
-    const page = renderDirListing(content.listing, owner, repo, filePath, meta, waterCss);
+    const page = renderDirListing(content.listing, owner, repo, ref, filePath, meta, waterCss);
     return new Response(page, {
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
     });
   }
 
   // 文件（文档 / 默认 README）→ markdown-it 已着色 + HTMLRewriter 代理图片。
-  const rewriter = buildRewriter(owner, repo, filePath);
+  const rewriter = buildRewriter(owner, repo, ref, filePath);
 
   // HTMLRewriter 在 Workers 上是流式、零额外内存；
   // 失败时降级返回原始 HTML（资源不走代理，至少内容可读）。
@@ -822,7 +869,7 @@ export async function serveGithub(_request, env, cleanPath, waterCss, hljs) {
   }
 
   // 文档路径统一用 highlight.js 主题（代码块已在 Worker 端由 markdown-it 着色）
-  const page = wrapDocPage(bodyHtml, owner, repo, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
+  const page = wrapDocPage(bodyHtml, owner, repo, ref, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
   return new Response(page, {
     headers: {
       "content-type": "text/html; charset=utf-8",
