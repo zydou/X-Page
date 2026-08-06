@@ -3,15 +3,15 @@ main = "worker.js"
 name = "x"
 preview_urls = false
 
-# Build: download & build remote assets (CSS, JS) before uploading.
-# This lets `npx wrangler deploy` work out of the box after cloning,
-[build]
-command = "sh build.sh"
-
 # Text module rules：把 .css 文件作为纯文本字符串导入 worker.js，
 # 内联到最终 HTML 的 <style> 标签里，彻底消除外部引用，
 # 让每条路由渲染的页面都完全自包含、不受混合内容拦截。
 rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
+
+# Build: download & build remote assets (CSS, JS) before uploading.
+# This lets `npx wrangler deploy` work out of the box after cloning,
+[build]
+command = "sh build.sh"
 
 [vars]
 TIMEZONE = "Asia/Shanghai"

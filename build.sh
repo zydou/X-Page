@@ -71,6 +71,8 @@ else
   fs.writeFileSync("highlight.mjs", out);
   console.log("OK highlight.mjs generated (" + out.length + " bytes, " + BUILTIN.length + " builtin langs)");
   '
+  # Strip CommonJS module.exports=hljs to avoid wrangler ESM warning
+  sed -i 's/&&(module\.exports=hljs)//g' highlight.mjs
 fi
 
 # ── Clean up intermediate files ────────────────────────────────
