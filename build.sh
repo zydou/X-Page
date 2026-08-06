@@ -11,7 +11,11 @@ else
   curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css -o water.css
 fi
 echo "-> Minifying CSS assets..."
-npx esbuild *.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
+if [ "$CI" = "true" ]; then
+  npx esbuild *.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
+else
+  npx esbuild water.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
+fi
 
 # ── 2. Wrap artplayer.js as ES module ──────────────────────────
 if [ -f artplayer.mjs ]; then

@@ -254,20 +254,27 @@ function parseArticle(article, tweetUrl) {
  * @param {{lang: string, tz: string}} cfg 时区与翻译语言配置
  * @param {string} waterCss water.css 源码字符串
  * @param {string} twitterCss twitter.css 源码字符串
+ * @param {boolean} [refresh] 是否强制刷新（绕过 API 缓存）
+ * @param {string} [refreshUrl] 刷新按钮的链接 URL
  * @returns {Promise<string>} 完整的 HTML 页面字符串
  */
-async function publish(rawPath, cfg, waterCss, twitterCss) {
+async function publish(rawPath, cfg, waterCss, twitterCss, refresh, refreshUrl) {
   const { lang, tz } = cfg;
   const pid = extractPid(rawPath);
   if (!pid) return "";
 
-  const apiUrl = lang
+  let apiUrl = lang
     ? `https://api.fxtwitter.com/2/thread/${pid}?lang=${encodeURIComponent(lang)}`
     : `https://api.fxtwitter.com/2/thread/${pid}`;
+  if (refresh) {
+    apiUrl += `${apiUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+  }
   const resp = await fetch(apiUrl, {
     headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
     signal: AbortSignal.timeout(3000),
-    cf: { cacheTtl: 31556952, cacheEverything: true },
+    cf: refresh
+      ? { cacheTtl: 0, cacheEverything: true }
+      : { cacheTtl: 31556952, cacheEverything: true },
   });
   if (!resp.ok) throw new Error(`fxtwitter API ${resp.status}`);
   const data = await resp.json();
@@ -286,7 +293,7 @@ async function publish(rawPath, cfg, waterCss, twitterCss) {
       /\n/g,
       "<br>"
     );
-    fullHtml += `<hr>${authorTag(author, tweetUrl, dateStr, avatarUrl)}<p>${makeUrlClickable(text)}</p>`;
+    fullHtml += `<hr>${authorTag(author, tweetUrl, dateStr, avatarUrl, refreshUrl)}<p>${makeUrlClickable(text)}</p>`;
     if (post.article) fullHtml += parseArticle(post.article, tweetUrl);
     fullHtml += buildMediaTag(post?.media?.all ?? []);
 
@@ -298,7 +305,7 @@ async function publish(rawPath, cfg, waterCss, twitterCss) {
       const qText = (q?.translation?.text ?? q?.text ?? "").replace(/\n/g, "<br>");
       const qAvatar = proxyUrl(q?.author?.avatar_url ?? "");
       const qDate = formatDate(q.created_timestamp, tz);
-      fullHtml += `${authorTag(qAuthor, qUrl, qDate, qAvatar)}<p>${makeUrlClickable(qText)}</p>`;
+      fullHtml += `${authorTag(qAuthor, qUrl, qDate, qAvatar, refreshUrl)}<p>${makeUrlClickable(qText)}</p>`;
       if (q.article) {
         const title = q?.article?.title ?? "";
         const preview = q?.article?.preview_text ?? "";
@@ -359,7 +366,10 @@ export function wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss) {
  * @param {string} twitterCss twitter.css 源码字符串
  * @returns {Response> 推文 HTML 或错误页面（400/502）
  */
-export async function serveTweet(_request, env, cleanPath, waterCss, twitterCss) {
+export async function serveTweet(request, env, cleanPath, waterCss, twitterCss) {
+  const url = new URL(request.url);
+  const refresh = url.searchParams.has("refresh");
+  const refreshUrl = `/${cleanPath}?refresh=1`;
   const cfg = {
     tz: (env && env.TIMEZONE) || "UTC",
     lang: (env && env.TRANSLATE_TO) || "",
@@ -370,14 +380,16 @@ export async function serveTweet(_request, env, cleanPath, waterCss, twitterCss)
   if (!pid) return new Response("Not found", { status: 404 });
 
   try {
-    const html = await publish(cleanPath, cfg, waterCss, twitterCss);
+    // 生成 HTML（刷新模式会绕过 API 缓存）
+    const html = await publish(cleanPath, cfg, waterCss, twitterCss, refresh, refreshUrl);
     if (!html) {
       return new Response("Invalid tweet URL", { status: 400 });
     }
+
     return new Response(html, {
       headers: {
         "content-type": "text/html; charset=utf-8",
-        "cache-control": "public, max-age=31556952",
+        "cache-control": refresh ? "public, max-age=0" : "public, max-age=31556952",
       },
     });
   } catch (e) {
