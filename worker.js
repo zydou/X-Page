@@ -63,7 +63,7 @@ import { serveTweet } from "./routes/tweet.js";
  * @returns {Response}
  */
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const u = new URL(request.url);
     let cleanPath = u.pathname.replace(/^\//, "");
     try {
@@ -113,6 +113,6 @@ export default {
     }
 
     // 推文路由（兜底 — 因为 /<user>/status/<id> 形态最宽泛，需最后匹配）
-    return serveTweet(request, env, cleanPath, WATER_CSS, TWITTER_CSS);
+    return serveTweet(request, env, cleanPath, WATER_CSS, TWITTER_CSS, ctx);
   },
 };

@@ -147,6 +147,33 @@ npx wrangler dev
   One-off tool: [meyerweb dencoder](https://meyerweb.com/eric/tools/dencoder/).
 - All consumer-supplied assets must be inlined into templates; never reference an external origin in rendered HTML.
 
+## Gotchas
+
+### `wrangler.toml` module rules 必须用 `[[rules]]` 数组表头形式
+
+wrangler 4.x 的 module rules 写法：
+
+```toml
+# ✅ 正确：数组表头形式
+[[rules]]
+type = "Text"
+globs = ["**/*.css"]
+fallthrough = true
+
+# ❌ 错误：裸字段形式（prod 当前若没 [[r2_buckets]] 等其他 [[array]]
+# 块能侥幸工作，但任何时候加 [[r2_buckets]]/[[kv_namespaces]] 等块，
+# 裸 rules 字段会被 TOML 吞进最近的 [[array]] 项里）
+rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
+```
+
+**踩坑症状**：wrangler 部署时打印 `Unexpected fields found in r2_buckets[0] field: "rules"`，CSS/其他 Text 模块没被打包，Worker 里 `import WATER_CSS from "./water.css"` 拿到的是空对象，HTML `<style>` 标签里直接渲染成 `[object Object]` 字符串 —— 页面布局完全乱掉。
+
+**为什么裸形式有时能用**：TOML 规定紧跟 `[[array]]` 项后、未被更上一级 `[table]` 切分前，裸字段都属于那个数组项。当 `wrangler.toml` 只有一个 `rules = [...]` 而没有其他 `[[xxx]]` 块时，它属于顶层 worker-config 表，能正常工作；**一旦加上 `[[r2_buckets]]` 等块且顺序在 rules 之前/之后无 `[table]` 切分，rules 就被吞掉**。
+
+**修复**：所有 wrangler config（prod + dev）一律用 `[[rules]]` 数组表头形式，并把 `[[rules]]` 放在其他 `[[array]]` 块之前。
+
+**验证手段**：部署后 `curl` 任意一条路由，看 HTML head 的 `<style>` 标签里是真实 CSS 还是 `[object Object]`。
+
 ## Testing
 
 No automated suite.
