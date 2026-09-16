@@ -12,6 +12,21 @@
  * 非微信公众号页面不会命中，退化为与 /html/ 相同行为，不报错。
  * ============================================================
  *
+ * ## R2 持久化缓存（复用 tweets 的 R2 绑定）
+ *
+ * 与 tweets 共用同一个 R2 bucket（x-page，绑定 TWEETS），
+ * 仅 key 前缀不同：`tweet/<id>.json` vs `wechat/<原文URL>`。
+ * 把渲染后的完整 HTML 存进 R2，命中直接返回缓存——
+ * 即使原文被删除，链接依然可读（防失效）。
+ *
+ *   - R2 持久层：key = `wechat/<原文URL>`，存最终 HTML 文档
+ *   - 命中规则：R2 有对象就直接返回，不做应用层过期判断
+ *   - 无 refresh 入口：命中即缓存，内容以首次抓取为准（防失效优先）
+ *   - 写回不阻塞响应（ctx.waitUntil 后台执行），失败静默忽略
+ *
+ * 注意：/html/ 路由不缓存，本缓存逻辑只对 /wechat/ 生效。
+ * 生命周期：wechat/ 前缀未配置过期规则，默认永久保留（防失效优先）。
+ *
  * ## 视频播放（未实现，踩坑记录）
  *
  * 微信公众号文章中的视频无法直接代理播放，调研结论如下。
@@ -94,10 +109,72 @@ function wrapTitleLink(html, target) {
 /**
  * 处理 /wechat/<encoded> 请求。
  *
+ * 流程：
+ *   1. 查 R2（key = `wechat/<原文URL>`）：命中直接返回缓存 HTML
+ *   2. 未命中 → 复用 serveHtml 抓取 + 改写，后台写回 R2
+ *   3. 抓取失败（原文删除 / 不可达）→ 原样返回错误（首次无缓存可回退）
+ *
+ * 无 refresh 入口：命中即缓存，内容以首次抓取为准。
+ *
  * @param {Request} request
- * @param {Object} env
+ * @param {Object} env 含 R2 绑定 TWEETS（与 tweets 共用同一桶；可空，无绑定则退化为纯代理）
+ * @param {Object} ctx Worker ExecutionContext（用于 waitUntil 后台写回）
  * @returns {Response}
  */
-export async function serveWechat(request, env) {
-  return serveHtml(request, env, wrapTitleLink, "/wechat/");
+export async function serveWechat(request, env, ctx) {
+  const url = new URL(request.url);
+
+  // 解析原文 URL。serveHtml 内部会再解析一次，这里为算 R2 key 需提前解出。
+  const encoded = url.pathname.slice("/wechat/".length);
+  if (!encoded) return new Response("missing url", { status: 400 });
+  let target;
+  try {
+    target = decodeURIComponent(encoded);
+  } catch {
+    return new Response("bad encoding", { status: 400 });
+  }
+  if (!/^https?:\/\//i.test(target)) target = "http://" + target;
+
+  // R2 key：直接用原文 URL 作为唯一标识（R2 key 支持任意 UTF-8 字符串）
+  const r2Key = "wechat/" + target;
+
+  // 第一步：命中 R2 直接返回缓存（原文删除后依然可读）
+  if (env?.TWEETS) {
+    const obj = await env.TWEETS.get(r2Key);
+    if (obj) {
+      try {
+        const html = await obj.text();
+        if (html) {
+          return new Response(html, {
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+              "cache-control": "public, max-age=31556952",
+              "access-control-allow-origin": "*",
+              "x-cache": "hit",
+            },
+          });
+        }
+      } catch {
+        // 损坏的缓存忽略，重新抓取
+      }
+    }
+  }
+
+  // 第二步：R2 miss → 抓取 + 渲染（复用 /html/ 的 serveHtml）
+  const resp = await serveHtml(request, env, wrapTitleLink, "/wechat/");
+  if (!resp.ok) return resp;
+
+  const html = await resp.text();
+  // 后台写回 R2（不阻塞响应；失败忽略，下次请求重新抓取）
+  if (env?.TWEETS && ctx) {
+    ctx.waitUntil(
+      env.TWEETS.put(r2Key, html, { httpMetadata: { contentType: "text/html" } }).catch(() => {})
+    );
+  }
+
+  const headers = new Headers(resp.headers);
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.set("cache-control", "public, max-age=31556952");
+  headers.set("x-cache", "miss");
+  return new Response(html, { status: resp.status, headers });
 }

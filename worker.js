@@ -99,7 +99,7 @@ export default {
 
     // 微信公众号文章专用代理（标题可点回原文）
     if (cleanPath === "wechat" || cleanPath.startsWith("wechat/")) {
-      return serveWechat(request, env);
+      return serveWechat(request, env, ctx);
     }
 
     // 通用媒体代理

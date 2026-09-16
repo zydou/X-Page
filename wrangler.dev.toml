@@ -13,7 +13,8 @@ type = "Text"
 globs = ["**/*.css"]
 fallthrough = true
 
-# R2 bucket 绑定（dev 环境）：与生产完全隔离
+# R2 bucket 绑定（dev 环境）：tweets 与 wechat 共用同一桶 x-page-dev
+# key 前缀：tweet/<id>.json 与 wechat/<原文URL>，与生产完全隔离
 # 生产用 x-page，dev 用 x-page-dev，方便测试时乱写不怕污染生产
 # lifecycle 规则在桶上配（不写在这里）：
 #   x-page      → tweet/ 前缀 365 天过期
