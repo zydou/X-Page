@@ -265,7 +265,7 @@ function parseArticle(article, tweetUrl) {
  * @param {string} [refreshUrl] 刷新按钮的链接 URL
  * @param {Object} [env] Worker 环境（含 R2 绑定 TWEETS 与 ctx）
  * @param {Object} [ctx] Worker ExecutionContext（用于 waitUntil 后台回写）
- * @returns {Promise<{html: string, fallback: boolean}>} HTML + 是否走了 R2 兜底（refresh 失败时）
+ * @returns {Promise<{html: string, fallback: boolean, empty: boolean}>} HTML + 是否走了 R2 兜底（refresh 失败时）+ body 是否为空
  */
 async function publish(rawPath, cfg, waterCss, twitterCss, refresh, refreshUrl, env, ctx) {
   const { lang, tz } = cfg;
@@ -336,8 +336,8 @@ async function publish(rawPath, cfg, waterCss, twitterCss, refresh, refreshUrl, 
         }
       } else {
         data = await resp.json();
-        // 异步写回 R2（不阻塞响应）
-        if (env?.TWEETS && ctx) {
+        // 异步写回 R2（不阻塞响应）；thread 为空说明是瞬时空响应，不写缓存以免污染一年
+        if (env?.TWEETS && ctx && (data?.thread?.length ?? 0) > 0) {
           const bucket = env.TWEETS;
           const body = JSON.stringify(data);
           const key = r2Key;
@@ -392,7 +392,8 @@ async function publish(rawPath, cfg, waterCss, twitterCss, refresh, refreshUrl, 
 
   // 清理：删除开头的 <hr> 占位与空段落
   fullHtml = fullHtml.trim().replace(/^<hr>/, "").replace(/<p><\/p>/g, "");
-  return { html: wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss), fallback };
+  // empty 标记：body 无任何内容时禁止边缘缓存，避免瞬时异常渲染被缓存整整一年
+  return { html: wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss), fallback, empty: fullHtml.length === 0 };
 }
 
 /**
@@ -455,14 +456,15 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
 
   try {
     // 生成 HTML（刷新模式会绕过 R2，强制调 API；API 失败时回退 R2 旧数据）
-    const { html, fallback } = await publish(cleanPath, cfg, waterCss, twitterCss, refresh, refreshUrl, env, ctx);
+    const { html, fallback, empty } = await publish(cleanPath, cfg, waterCss, twitterCss, refresh, refreshUrl, env, ctx);
     if (!html) {
       return new Response("Invalid tweet URL", { status: 400 });
     }
 
+    // 空页面（body 无内容）不缓存：瞬时空响应一旦被边缘缓存会顶住整整一年
     const headers = {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": refresh ? "public, max-age=0" : "public, max-age=31556952",
+      "cache-control": empty ? "no-store" : refresh ? "public, max-age=0" : "public, max-age=31556952",
     };
     if (fallback) {
       // refresh 模式但 fxtwitter 失败、用了 R2 旧数据：通过响应头告知
