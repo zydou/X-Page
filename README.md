@@ -20,6 +20,29 @@ https://<your-worker-domain>/{username}/status/{tweet_id}
 - 可选翻译目标语言
 - 内置媒体代理：图片/视频经 Worker 服务端回源流式转发，无需任何外部代理即可在无法直连 Twitter 的地区使用
 
+#### 解析模式（`?mode=`）
+
+默认解析出**全部推文**。可用 `?mode=` 收窄范围：
+
+```txt
+https://<your-worker-domain>/{username}/status/{tweet_id}               # 默认 all：全部推文
+https://<your-worker-domain>/{username}/status/{tweet_id}?mode=self    # 仅本推
+https://<your-worker-domain>/{username}/status/{tweet_id}?mode=quote   # 本推 + 引用
+https://<your-worker-domain>/{username}/status/{tweet_id}?mode=thread  # 本推 + 串推
+```
+
+| 模式            | 本推 | 本推引用 | 串推 | 串推引用 |
+| --------------- | ---- | -------- | ---- | -------- |
+| （缺省）/ `all` | ✓    | ✓        | ✓    | ✓        |
+| `self`          | ✓    |          |      |          |
+| `quote`         | ✓    | ✓        |      |          |
+| `thread`        | ✓    |          | ✓    |          |
+
+- `all` 保留历史行为：渲染上游返回的完整串推（含本推的父推文），且每条推文各自展开引用
+- `thread` 只保留本推发起的串推，不含父推文
+- 非法取值一律按 `all` 处理
+- 可与 `?refresh=1` 叠加，例如 `?mode=quote&refresh=1`
+
 ### 🎬 视频代理
 
 ```txt

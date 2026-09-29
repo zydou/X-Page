@@ -15,7 +15,7 @@ x-page/
 │   ├── image.js             # /img/<url> and /img/d/<url> → image viewer HTML
 │   ├── html.js              # /html/<url> → HTML fetch + rewrite
 │   ├── wechat.js            # /wechat/<url> → WeChat article HTML
-│   └── tweet.js             # /<user>/status/<id> → tweet HTML
+│   └── tweet.js             # /<user>/status/<id>[?mode=] → tweet HTML
 ├── lib/
 │   └── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
 ├── wrangler.toml            # service config, env vars, observability, Text module rules
@@ -30,7 +30,7 @@ x-page/
 
 | Path                             | Service |
 | -------------------------------- | ------- |
-| `/<user>/status/<id>`            | Tweet → standalone HTML with inlined media |
+| `/<user>/status/<id>[?mode=m]`  | Tweet → standalone HTML; `?mode=self` / `quote` / `thread` / `all`（缺省即 `all`，全部推文） |
 | `/vid/<raw-url>`                 | Video → player HTML (proxied, Range passthrough) |
 | `/vid/d/<raw-url>`               | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`                 | Image → adaptive HTML (strips `Content-Disposition: attachment`) |

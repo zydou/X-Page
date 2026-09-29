@@ -3,20 +3,27 @@
  * ============================================================
  * X / Twitter 推文 → 自包含 HTML 的主路由。
  *
- * 路由形态：/<username>/status/<tweet_id>
+ * 路由形态：/<username>/status/<tweet_id>[?mode=<mode>][&refresh]
+ *
+ * 解析模式（?mode=，缺省 = all，非法值同样回退 all）：
+ *   all    fxtwitter 返回的完整 thread（含本推的祖先推文）+ 每条的引用，历史默认行为
+ *   self   仅本推
+ *   quote  本推 + 本推引用
+ *   thread 本推 + 本推的串推后代（剔除祖先推文）
  *
  * 完整渲染流水线：
- *   1. extractPid()           从路径提取推文 ID
- *   2. publish()              调 fxtwitter API 拉取 thread + 推文详情
- *   3. parseArticle()         解析 Twitter Article 长文为 HTML
- *   4. buildMediaTag()        拼出推文内图片 / 视频的画廊片段
- *   5. wrapHtml()             用 water.css + twitter.css 包裹生成最终页
+ *   1. parseMode()            从 query 提取解析模式
+ *   2. extractPid()           从路径提取推文 ID
+ *   3. publish()              调 fxtwitter API 拉取 thread + 推文详情
+ *   4. threadDescendants()    从 thread 中筛出本推的串推后代（剔除祖先）
+ *   5. renderPost()           单条推文 → HTML（头部 + 正文 + article + 媒体 + 引用）
+ *   6. wrapHtml()             用 water.css + twitter.css 包裹生成最终页
  *
  * 资产注入：
  *   - waterCss / twitterCss 由 worker.js 通过参数注入
  *   - proxyUrl 等工具函数来自 lib/utils.js
  *
- * 文件较大（约 280 行），但逻辑上是单一推事的"内部流水线"：
+ * 文件较大（约 300 行），但逻辑上是单一推事的"内部流水线"：
  * 一个入口的产出是下一个阶段的输入，拆分反而增加跳转成本。
  * ============================================================
  */
@@ -232,6 +239,94 @@ function parseArticle(article, tweetUrl) {
   return `<h2><a href="${tweetUrl}">${title}</a></h2>${html}`;
 }
 
+/** ?mode= 的合法取值 */
+const MODES = ["all", "self", "quote", "thread"];
+
+/**
+ * 解析 ?mode= 查询参数。
+ *
+ * 只接受 all / self / quote / thread；缺省或任何非法值一律回退 all，
+ * 不做 400——分享出去的链接带上未知参数时不应炸掉整个页面。
+ *
+ * @param {string|null} raw URL 上的原始 mode 值
+ * @returns {"all"|"self"|"quote"|"thread"} 规范化后的解析模式
+ */
+function parseMode(raw) {
+  return MODES.includes(raw) ? raw : "all";
+}
+
+/**
+ * 从 fxtwitter 的 data.thread 中筛出"本推的串推后代"。
+ *
+ * thread[] 不只包含后代，还可能包含本推的祖先推文（实测：请求回复推文时
+ * thread 里同样带父推文）。祖先集通过从本推沿 replying_to.status 向上游走
+ * 得到，遍历限定在 thread[] 的 id 集合内，循环上限 thread.length 次防环。
+ *
+ * @param {string} pid 请求的推文 ID
+ * @param {Array} thread fxtwitter 返回的 data.thread
+ * @returns {Array} 按 created_timestamp 升序排列的后代推文
+ */
+function threadDescendants(pid, thread) {
+  thread = thread || [];
+  const ids = new Set(thread.map((p) => p && p.id));
+  const ancestors = new Set();
+  let cur = thread.find((p) => p && p.id === pid);
+  for (let i = 0; i < thread.length && cur; i++) {
+    const parent = cur.replying_to && cur.replying_to.status;
+    if (!parent || !ids.has(parent)) break;
+    ancestors.add(parent);
+    cur = thread.find((p) => p && p.id === parent);
+  }
+  return thread
+    .filter((p) => p && p.id && p.id !== pid && !ancestors.has(p.id))
+    .sort((a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0));
+}
+
+/**
+ * 渲染单条推文为 HTML 片段：头部 + 正文 + 长文 + 媒体画廊 + 可选引用。
+ *
+ * 本推、串推、引用推文共用同一套渲染逻辑。此前主循环与 quote 块是两段
+ * 重复代码且字段访问不一致（quote 漏了 html_no_media），抽出后统一为
+ * html_no_media ?? translation.text ?? text。
+ *
+ * article 的呈现按上下文区分（保留历史行为）：
+ *   - 正文推文 → parseArticle 全量渲染
+ *   - 引用推文 → 仅标题《…》+ preview_text 摘要，避免长文撑爆页面
+ *
+ * @param {Object|null} post fxtwitter 返回的单条推文对象
+ * @param {{url: string, tz: string, refreshUrl: string}} opt 渲染上下文：url = 无 url 字段时的回退链接，tz = 时区，refreshUrl = 刷新按钮链接
+ * @param {boolean} [opt.withQuote] 是否展开该推的引用推文（仅展开一层）
+ * @param {boolean} [opt.articlePreview] 以"标题+摘要"而非全量渲染 article
+ * @returns {string} 可直接嵌入推文卡片的 HTML 片段
+ */
+function renderPost(post, opt) {
+  if (!post) return "";
+  const { url: fallbackUrl, tz, refreshUrl, withQuote = false, articlePreview = false } = opt;
+  const author = post.author && post.author.name ? post.author.name : "Anonymous";
+  const tweetUrl = post.url || fallbackUrl;
+  const avatarUrl = proxyUrl(post.author && post.author.avatar_url ? post.author.avatar_url : "");
+  const text = (post.html_no_media ?? post.translation?.text ?? post.text ?? "").replace(/\n/g, "<br>");
+
+  let html = authorTag(author, tweetUrl, formatDate(post.created_timestamp, tz), avatarUrl, refreshUrl);
+  html += `<p>${makeUrlClickable(text)}</p>`;
+  if (post.article) {
+    if (articlePreview) {
+      // 引用推文只给标题 + 摘要
+      const title = post.article.title ?? "";
+      const preview = post.article.preview_text ?? "";
+      html += `<a href="${tweetUrl}" target="_blank"><h3>《${title}》</h3></a><blockquote>${preview}</blockquote>`;
+    } else {
+      html += parseArticle(post.article, tweetUrl);
+    }
+  }
+  html += buildMediaTag(post.media && post.media.all ? post.media.all : []);
+
+  if (withQuote && post.quote) {
+    html += renderPost(post.quote, { url: fallbackUrl, tz, refreshUrl, articlePreview: true });
+  }
+  return html;
+}
+
 /**
  * 推文主流程：调 fxtwitter API 并拼出整页 thread HTML。
  *
@@ -248,17 +343,18 @@ function parseArticle(article, tweetUrl) {
  * 渲染顺序：
  *   1. 查 R2（无绑定 / refresh=1 / R2 miss 时跳过）→ 拿到 JSON
  *   2. 否则拉 thread API，写回 R2
- *   3. 按 created_timestamp 从小到大排序（thread 不一定有序）
- *   4. 每条 post：头部（authorTag）+ 正文（makeUrlClickable）+ 长文（parseArticle）
- *               + 媒体画廊（buildMediaTag）
- *   5. 若存在 quote（引用推文），递归渲染引用体及其 article
- *   6. wrapHtml 拼接 <head> + <style>
+ *   3. all 模式：完整 thread 按 created_timestamp 升序渲染（thread 不一定有序），
+ *      每条推文都展开引用——与旧实现逐字节一致，含本推的祖先推文
+ *   4. 其他模式以本推为起点：self 只渲染本推；quote 追加本推引用；
+ *      thread 追加 threadDescendants() 筛出的串推后代（剔除祖先推文）
+ *   5. wrapHtml 拼接 <head> + <style>
  *
  * 注意：status.author.name 作为 og:site_name 写进 <head>，
  * 便于消息预览机器人识别"谁在说话"。
  *
  * @param {string} rawPath 原始路径（含 username/status/ 前缀）
  * @param {{lang: string, tz: string}} cfg 时区与翻译语言配置
+ * @param {"all"|"self"|"quote"|"thread"} mode 解析模式（见文件头）
  * @param {string} waterCss water.css 源码字符串
  * @param {string} twitterCss twitter.css 源码字符串
  * @param {boolean} [refresh] 是否强制刷新（绕过 R2，强制调 API）
@@ -267,7 +363,7 @@ function parseArticle(article, tweetUrl) {
  * @param {Object} [ctx] Worker ExecutionContext（用于 waitUntil 后台回写）
  * @returns {Promise<{html: string, fallback: boolean, empty: boolean}>} HTML + 是否走了 R2 兜底（refresh 失败时）+ body 是否为空
  */
-async function publish(rawPath, cfg, waterCss, twitterCss, refresh, refreshUrl, env, ctx) {
+async function publish(rawPath, cfg, mode, waterCss, twitterCss, refresh, refreshUrl, env, ctx) {
   const { lang, tz } = cfg;
   const pid = extractPid(rawPath);
   if (!pid) return "";
@@ -354,44 +450,34 @@ async function publish(rawPath, cfg, waterCss, twitterCss, refresh, refreshUrl, 
   }
 
   const thisAuthor = data?.status?.author?.name ?? "Anonymous";
+  const base = { url: rawPath, tz, refreshUrl };
   const thread = data?.thread ?? [];
+  const byTs = (a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0);
 
-  let fullHtml = "";
-  const sorted = thread.slice().sort((a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0));
-  for (const post of sorted) {
-    const author = post?.author?.name ?? "Anonymous";
-    const tweetUrl = post?.url ?? rawPath;
-    const dateStr = formatDate(post.created_timestamp, tz);
-    const avatarUrl = proxyUrl(post?.author?.avatar_url ?? "");
-    const text = (post?.html_no_media ?? post?.translation?.text ?? post?.text ?? "").replace(
-      /\n/g,
-      "<br>"
-    );
-    fullHtml += `<hr>${authorTag(author, tweetUrl, dateStr, avatarUrl, refreshUrl)}<p>${makeUrlClickable(text)}</p>`;
-    if (post.article) fullHtml += parseArticle(post.article, tweetUrl);
-    fullHtml += buildMediaTag(post?.media?.all ?? []);
-
-    // 引用推文（quote）递归渲染：article 以标题 + preview_text 摘要形式展示
-    if (post.quote) {
-      const q = post.quote;
-      const qAuthor = q?.author?.name ?? "Anonymous";
-      const qUrl = q?.url ?? rawPath;
-      const qText = (q?.translation?.text ?? q?.text ?? "").replace(/\n/g, "<br>");
-      const qAvatar = proxyUrl(q?.author?.avatar_url ?? "");
-      const qDate = formatDate(q.created_timestamp, tz);
-      fullHtml += `${authorTag(qAuthor, qUrl, qDate, qAvatar, refreshUrl)}<p>${makeUrlClickable(qText)}</p>`;
-      if (q.article) {
-        const title = q?.article?.title ?? "";
-        const preview = q?.article?.preview_text ?? "";
-        fullHtml += `<a href="${qUrl}" target="_blank"><h3>《${title}》</h3></a>`;
-        fullHtml += `<blockquote>${preview}</blockquote>`;
+  let fullHtml;
+  if (mode === "all") {
+    // 历史默认行为：渲染 fxtwitter 返回的完整 thread（含本推的祖先推文），
+    // 按时间升序，且每条推文的引用都展开。这里刻意不复用 threadDescendants，
+    // 以保证 ?mode=all 与不带参数的输出与旧实现逐字节一致。
+    const ids = new Set(thread.filter((p) => p && p.id).map((p) => p.id));
+    const list = (ids.has(pid) ? thread : [data?.status, ...thread]).filter((p) => p && p.id);
+    fullHtml = list
+      .sort(byTs)
+      .map((p, i) => (i ? `<hr>` : "") + renderPost(p, { ...base, withQuote: true }))
+      .join("");
+  } else {
+    // self / quote / thread 均以本推为起点
+    fullHtml = renderPost(data?.status, { ...base, withQuote: mode === "quote" });
+    // thread 模式追加串推后代（剔除本推的祖先推文）
+    if (mode === "thread") {
+      for (const post of threadDescendants(pid, thread)) {
+        fullHtml += `<hr>` + renderPost(post, { ...base });
       }
-      fullHtml += buildMediaTag(q?.media?.all ?? []);
     }
   }
 
-  // 清理：删除开头的 <hr> 占位与空段落
-  fullHtml = fullHtml.trim().replace(/^<hr>/, "").replace(/<p><\/p>/g, "");
+  // 清理空段落
+  fullHtml = fullHtml.trim().replace(/<p><\/p>/g, "");
   // empty 标记：body 无任何内容时禁止边缘缓存，避免瞬时异常渲染被缓存整整一年
   return { html: wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss), fallback, empty: fullHtml.length === 0 };
 }
@@ -439,12 +525,14 @@ export function wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss) {
  * @param {string} cleanPath 去首斜杠 + decode 后的路径
  * @param {string} waterCss water.css 源码字符串
  * @param {string} twitterCss twitter.css 源码字符串
- * @returns {Response> 推文 HTML 或错误页面（400/502）
+ * @returns {Response} 推文 HTML 或错误页面（404/502）
  */
 export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, ctx) {
   const url = new URL(request.url);
   const refresh = url.searchParams.has("refresh");
-  const refreshUrl = `/${cleanPath}?refresh=1`;
+  const mode = parseMode(url.searchParams.get("mode"));
+  // 刷新链接需带上 mode，否则点刷新按钮会跳回 all 模式
+  const refreshUrl = `/${cleanPath}?refresh=1` + (mode === "all" ? "" : `&mode=${mode}`);
   const cfg = {
     tz: (env && env.TIMEZONE) || "UTC",
     lang: (env && env.TRANSLATE_TO) || "",
@@ -456,7 +544,17 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
 
   try {
     // 生成 HTML（刷新模式会绕过 R2，强制调 API；API 失败时回退 R2 旧数据）
-    const { html, fallback, empty } = await publish(cleanPath, cfg, waterCss, twitterCss, refresh, refreshUrl, env, ctx);
+    const { html, fallback, empty } = await publish(
+      cleanPath,
+      cfg,
+      mode,
+      waterCss,
+      twitterCss,
+      refresh,
+      refreshUrl,
+      env,
+      ctx
+    );
     if (!html) {
       return new Response("Invalid tweet URL", { status: 400 });
     }
