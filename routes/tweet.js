@@ -38,6 +38,16 @@ import {
 } from "../lib/utils.js";
 
 /**
+ * 粗略估算 token 数：中文字符按 2 字符/token，其他按 4 字符/token。
+ * 比统一 /4 更贴近中英混排场景的真实 tokenizer 行为。
+ */
+function estimateTokens(text) {
+  const chinese = (text.match(/[一-鿿]/g) || []).length;
+  const other = text.length - chinese;
+  return Math.ceil(chinese / 2 + other / 4);
+}
+
+/**
  * 推文字号解析：内联样式的 <b>/<i> 渲染。
  *
  * 在 RawText 实体里，文本片段由 inlineStyleRanges 描述，
@@ -493,7 +503,7 @@ async function publish(rawPath, cfg, mode, waterCss, twitterCss, refresh, refres
  * @param {string} fullHtml thread 正文 HTML
  * @param {string} thisAuthor 顶层作者的显示名（供 og:site_name 用）
  * @param {string} waterCss water.css 源码字符串
- * @param {string} twitterCss twitter.css 源码字符串
+ * @param {string} twitterCss twitterCss 源码字符串
  * @returns {string} 完整自包含的 HTML 文档
  */
 export function wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss) {
@@ -513,19 +523,194 @@ export function wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss) {
 }
 
 /**
+ * 将单条推文渲染为 Markdown 片段。
+ * 复用 renderPost 的数据提取逻辑，仅改输出格式。
+ */
+function renderPostMarkdown(post, opt) {
+  if (!post) return "";
+  const { tz, refreshUrl, withQuote = false, articlePreview = false, isQuote = false } = opt;
+  const author = post.author && post.author.name ? post.author.name : "Anonymous";
+  const tweetUrl = post.url || opt.url || "";
+  const avatarUrl = post.author && post.author.avatar_url ? post.author.avatar_url : "";
+  // 取纯文本（优先 translation.text > text > html_no_media 去标签）
+  let text = post.translation?.text ?? post.text ?? post.html_no_media ?? "";
+  text = text.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
+
+  // YAML frontmatter：结构化元数据，便于 Agent 解析
+  const dateStr = formatDate(post.created_timestamp, tz);
+  const fmAuthor = author.replace(/"/g, '\\"');
+  const fmTweetUrl = tweetUrl.replace(/"/g, '\\"');
+  let md = `---\nauthor: "${fmAuthor}"\nauthor_url: "${fmTweetUrl}"\ndate: "${dateStr}"\ntweet_url: "${fmTweetUrl}"`;
+  if (isQuote) md += `\ntweet_type: "quote"`;
+  md += `\n---\n\n`;
+  md += text + "\n";
+
+  if (post.article) {
+    if (articlePreview) {
+      const title = post.article.title ?? "";
+      const preview = post.article.preview_text ?? "";
+      md += `\n**[${title}](${tweetUrl})**\n\n${preview}\n`;
+    } else {
+      // article 完整渲染：标题 + blocks
+      md += `\n## [${post.article.title || "Twitter Article"}](${tweetUrl})\n`;
+      for (const block of post.article.content?.blocks ?? []) {
+        const blockText = inlineStyle(block.text, block.inlineStyleRanges)
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<[^>]+>/g, "");
+        switch (block.type) {
+          case "header-one":
+          case "header-two":
+            md += `\n## ${blockText}\n`;
+            break;
+          case "header-three":
+            md += `\n### ${blockText}\n`;
+            break;
+          case "header-four":
+            md += `\n#### ${blockText}\n`;
+            break;
+          case "blockquote":
+            md += `\n> ${blockText}\n`;
+            break;
+          case "ordered-list-item":
+          case "unordered-list-item":
+            md += `\n- ${blockText}`;
+            break;
+          case "atomic":
+            md += `\n${parseAtomicMarkdown(block.entityRanges, post.article)}\n`;
+            break;
+          default:
+            if (blockText.trim()) md += `\n${blockText}\n`;
+        }
+      }
+      const coverUrl = post.article.cover_media?.media_info?.original_img_url ?? "";
+      if (coverUrl) md += `\n![cover](${coverUrl})\n`;
+    }
+  }
+
+  // 媒体
+  const mediaAll = post.media?.all ?? [];
+  for (const m of mediaAll) {
+    if (m.type === "photo" && m.url) {
+      md += `\n![image](${m.url})\n`;
+    } else if (m.type === "video" && m.url) {
+      md += `\n[video](${m.url})\n`;
+    } else if (m.type === "gif" && m.url) {
+      md += `\n[gif](${m.url})\n`;
+    }
+  }
+
+  if (withQuote && post.quote) {
+    md += renderPostMarkdown(post.quote, { ...opt, articlePreview: true, isQuote: true });
+  }
+  return md;
+}
+
+/**
+ * 解析 article atomic 块为 markdown（简化版，复用 entityMap 逻辑）。
+ */
+function parseAtomicMarkdown(entities, article) {
+  if (!entities || !entities.length) return "";
+  // 收拢 article 内的静态媒体
+  const mediaList = [];
+  for (const media of article?.media_entities || []) {
+    const variants = ((media?.media_info?.variants ?? []).filter(
+      (x) => x.content_type === "video/mp4"
+    ));
+    if (variants.length) {
+      variants.sort((a, b) => (b.bit_rate || 0) - (a.bit_rate || 0));
+      const videoUrl = variants[0]?.url ?? "";
+      if (videoUrl) mediaList.push({ url: videoUrl, type: "video", media_id: media.media_id });
+    } else {
+      const imgUrl = media?.media_info?.original_img_url ?? "";
+      if (imgUrl) mediaList.push({ url: imgUrl, type: "photo", media_id: media.media_id });
+    }
+  }
+  const entityMap = article?.content?.entityMap ?? {};
+  const entityDict = {};
+  if (Array.isArray(entityMap)) {
+    for (const x of entityMap) entityDict[String(x.key)] = x.value;
+  } else {
+    for (const k in entityMap) entityDict[String(k)] = entityMap[k];
+  }
+
+  let texts = "";
+  for (const x of entities) {
+    const entity = entityDict[String(x.key)];
+    if (!entity) continue;
+    const eType = (entity.type || "").toUpperCase();
+    if (eType === "MEDIA") {
+      const mediaId = entity?.data?.mediaItems?.[0]?.mediaId ?? "";
+      const photo = mediaList.find((m) => m.type === "photo" && m.media_id === mediaId);
+      if (photo) texts += `\n![image](${photo.url})\n`;
+      else {
+        const vid = mediaList.find((m) => m.type === "video" && m.media_id === mediaId);
+        if (vid) texts += `\n[video](${vid.url})\n`;
+      }
+    } else if (eType === "DIVIDER") {
+      texts += "\n---\n";
+    } else if (eType === "TWEET") {
+      const tweetId = entity?.data?.tweetId ?? "";
+      if (tweetId) texts += `\n> [Quote Tweet](https://x.com/i/status/${tweetId})\n`;
+    } else if (eType === "MARKDOWN") {
+      const markdown = (entity?.data?.markdown ?? "").replace(/`/g, "");
+      const idx = markdown.indexOf("\n");
+      if (idx >= 0) {
+        const lang = markdown.slice(0, idx);
+        const raw = markdown.slice(idx + 1);
+        texts += `\n\`\`\`${lang}\n${raw}\n\`\`\`\n`;
+      } else {
+        texts += `\n\`\`\`\n${markdown}\n\`\`\`\n`;
+      }
+    }
+  }
+  return texts.trim();
+}
+
+/**
+ * 将 fxtwitter 完整数据渲染为完整 Markdown 文档。
+ * 逻辑与 publish() 保持一致（mode 过滤、排序、引用展开等）。
+ */
+function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
+  const { tz } = cfg;
+  const thread = data?.thread ?? [];
+  const thisAuthor = data?.status?.author?.name ?? "Anonymous";
+  const byTs = (a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0);
+  const base = { tz, refreshUrl };
+
+  let md = "";
+  if (mode === "all") {
+    const ids = new Set(thread.filter((p) => p && p.id).map((p) => p.id));
+    const list = (ids.has(pid) ? thread : [data?.status, ...thread]).filter((p) => p && p.id);
+    md = list
+      .sort(byTs)
+      .map((p) => renderPostMarkdown(p, { ...base, withQuote: true }))
+      .join("\n");
+  } else {
+    md = renderPostMarkdown(data?.status, { ...base, withQuote: mode === "quote" });
+    if (mode === "thread") {
+      for (const post of threadDescendants(pid, thread)) {
+        md += "\n" + renderPostMarkdown(post, base);
+      }
+    }
+  }
+  return md.trim();
+}
+
+/**
  * /<user>/status/<id> 路由的主入口。
  *
  * 拆分 publish 之外的原因：
  *   - 错误处理（API 超时 / JSON 解析失败）集中在此
  *   - 环境变量读取（TIMEZONE / TRANSLATE_TO）留在路由层，
  *     避免污染 publish 的可测试性
+ *   - 支持 Accept: text/markdown 协商，返回纯 Markdown（供 Agent / CLI 直接消费）
  *
  * @param {Request} request 原始请求
  * @param {Object} env Worker 环境变量（含 TIMEZONE / TRANSLATE_TO）
  * @param {string} cleanPath 去首斜杠 + decode 后的路径
  * @param {string} waterCss water.css 源码字符串
  * @param {string} twitterCss twitter.css 源码字符串
- * @returns {Response} 推文 HTML 或错误页面（404/502）
+ * @returns {Response} 推文 HTML 或 Markdown，或错误页面（404/502）
  */
 export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, ctx) {
   const url = new URL(request.url);
@@ -542,8 +727,31 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
   // 路径不进 "username/status/123" 格式，直接返回 404
   if (!pid) return new Response("Not found", { status: 404 });
 
+  // 检查是否请求 Markdown（Agent / CLI 协商）
+  const accept = request.headers.get("accept") || "";
+  const wantsMarkdown = accept.includes("text/markdown");
+
   try {
-    // 生成 HTML（刷新模式会绕过 R2，强制调 API；API 失败时回退 R2 旧数据）
+    if (wantsMarkdown) {
+      // Markdown 模式：复用数据获取逻辑，改用 Markdown 渲染器
+      const data = await fetchTweetData(cleanPath, cfg, refresh, refreshUrl, env, ctx);
+      if (!data || !data.status) {
+        return new Response("Tweet not found", { status: 404 });
+      }
+      const md = renderMarkdown(data, cfg, mode, refreshUrl, pid);
+      if (!md) {
+        return new Response("Empty tweet", { status: 404 });
+      }
+      const headers = {
+        "content-type": "text/markdown; charset=utf-8",
+        "cache-control": refresh ? "public, max-age=0" : "public, max-age=31556952",
+        "vary": "Accept",
+        "x-markdown-tokens": String(estimateTokens(md)),
+      };
+      return new Response(md, { headers });
+    }
+
+    // 默认 HTML 模式
     const { html, fallback, empty } = await publish(
       cleanPath,
       cfg,
@@ -563,9 +771,9 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
     const headers = {
       "content-type": "text/html; charset=utf-8",
       "cache-control": empty ? "no-store" : refresh ? "public, max-age=0" : "public, max-age=31556952",
+      "vary": "Accept",
     };
     if (fallback) {
-      // refresh 模式但 fxtwitter 失败、用了 R2 旧数据：通过响应头告知
       headers["x-cache-fallback"] = "r2";
     }
 
@@ -573,4 +781,68 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
   } catch (e) {
     return new Response("Error: " + (e && e.message ? e.message : String(e)), { status: 502 });
   }
+}
+
+/**
+ * 仅获取推文数据（不渲染），供 Markdown 模式复用。
+ * 逻辑与 publish() 的数据获取部分完全一致。
+ */
+async function fetchTweetData(rawPath, cfg, refresh, refreshUrl, env, ctx) {
+  const { lang } = cfg;
+  const pid = extractPid(rawPath);
+  if (!pid) return null;
+
+  const r2Key = `tweet/${pid}.json`;
+  let data = null;
+  let fallbackFromR2 = null;
+
+  // 1. 尝试 R2
+  if (env?.TWEETS) {
+    const obj = await env.TWEETS.get(r2Key);
+    if (obj) {
+      try {
+        const parsed = JSON.parse(await obj.text());
+        if (refresh) fallbackFromR2 = parsed;
+        else data = parsed;
+      } catch { /* 损坏的 JSON 忽略 */ }
+    }
+  }
+
+  // 2. 未命中 → 拉 fxtwitter 并写回 R2
+  if (!data) {
+    let apiUrl = lang
+      ? `https://api.fxtwitter.com/2/thread/${pid}?lang=${encodeURIComponent(lang)}`
+      : `https://api.fxtwitter.com/2/thread/${pid}`;
+    if (refresh) {
+      apiUrl += `${apiUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+    }
+    let resp;
+    try {
+      resp = await fetch(apiUrl, {
+        headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
+        signal: AbortSignal.timeout(3000),
+        cf: refresh
+          ? { cacheTtl: 0, cacheEverything: true }
+          : { cacheTtl: 31556952, cacheEverything: true },
+      });
+    } catch (e) {
+      if (fallbackFromR2) return fallbackFromR2;
+      throw e;
+    }
+    if (!resp.ok) {
+      if (fallbackFromR2) return fallbackFromR2;
+      throw new Error(`fxtwitter API ${resp.status}`);
+    }
+    data = await resp.json();
+
+    // 异步写回 R2
+    if (env?.TWEETS && ctx && (data?.thread?.length ?? 0) > 0) {
+      ctx.waitUntil(
+        env.TWEETS.put(r2Key, JSON.stringify(data), {
+          httpMetadata: { contentType: "application/json" },
+        }).catch(() => {})
+      );
+    }
+  }
+  return data;
 }
