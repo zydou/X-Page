@@ -6,7 +6,8 @@
  * 与 /html/ 共享抓取 + 资源代理逻辑，唯一差异是给文章标题包上
  * <a href="原文链接">，方便用户在嵌入环境里点标题跳转。
  *
- * 复用方式：通过 serveHtml 的 transform 钩子注入 wrapTitleLink。
+ * 复用方式：通过 serveHtml 的 transform 钩子注入 transformWechat
+ * （标题包链接 + Markdown 变体额外截掉页脚 chrome）。
  *
  * 内容协商：Accept: text/markdown 时交给 serveHtml 的 Markdown 管线，
  * 返回 Markdown 文本（标题同样包着可点回原文的链接）。
@@ -109,6 +110,34 @@ function wrapTitleLink(html, target) {
   );
 }
 
+// 页脚 chrome 的起点。这个 div 的 id 是微信客户端固定用来弹「预览时标签不可点」
+// toast 的锚点，每篇文档恰好出现一次，它之后全是底部工具栏（修改于 / 不喜欢）、
+// 二维码弹窗、分享面板、作者头像等——全是 display:none 的用户不可见元素。
+// 但 toMarkdown 不做视觉渲染，只抽文本，这些隐藏元素会整段漏进 Markdown 尾部。
+// 锚在元素 id 而非提示文案上：id 是客户端 JS 钩子，文案会改。
+const FOOTER_ANCHOR = /<div\b[^>]*\bid="js_tags_preview_toast"/i;
+
+function cutWechatFooter(html) {
+  const m = FOOTER_ANCHOR.exec(html);
+  return m ? html.slice(0, m.index) : html;
+}
+
+/**
+ * /wechat/ 的 transform 钩子：包标题链接，并在 Markdown 变体上截掉页脚 chrome。
+ *
+ * 只对 Markdown 管线截断——HTML 视图里那些 div 本来就是 display:none，
+ * 保留它们才能维持 /wechat/「完整渲染原文」的语义。
+ *
+ * @param {string} html
+ * @param {string} target
+ * @param {boolean} isMarkdown 是否走 Markdown 管线
+ * @returns {string}
+ */
+function transformWechat(html, target, isMarkdown) {
+  const wrapped = wrapTitleLink(html, target);
+  return isMarkdown ? cutWechatFooter(wrapped) : wrapped;
+}
+
 /**
  * 处理 /wechat/<encoded> 请求。
  *
@@ -144,7 +173,7 @@ export async function serveWechat(request, env, ctx) {
   // Markdown 协商必须先短路：下面 R2 命中分支会无视 Accept 直接返回缓存 HTML。
   // 交给 serveHtml 的独立管线处理，它按路由前缀隔离出自己的 md/wechat/ R2 key。
   if ((request.headers.get("accept") || "").includes("text/markdown")) {
-    return serveHtml(request, env, ctx, wrapTitleLink, "/wechat/");
+    return serveHtml(request, env, ctx, transformWechat, "/wechat/");
   }
 
   // R2 key：直接用原文 URL 作为唯一标识（R2 key 支持任意 UTF-8 字符串）
@@ -174,7 +203,7 @@ export async function serveWechat(request, env, ctx) {
   }
 
   // 第二步：R2 miss → 抓取 + 渲染（复用 /html/ 的 serveHtml）
-  const resp = await serveHtml(request, env, ctx, wrapTitleLink, "/wechat/");
+  const resp = await serveHtml(request, env, ctx, transformWechat, "/wechat/");
   if (!resp.ok) return resp;
 
   const html = await resp.text();

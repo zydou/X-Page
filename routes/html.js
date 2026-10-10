@@ -307,7 +307,9 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
       status: 502,
     });
   }
-  if (transform) html = transform(html, target);
+  // isMarkdown=true：钩子需要知道走的是哪条管线，/wechat/ 据此只做
+  // Markdown 变体才需要的清理（HTML 视图里页脚本来就该保留）。
+  if (transform) html = transform(html, target, true);
 
   // 4. 转换。HTML 是确定性解析、零 Neuron 消耗，没有速率限制可退避，
   //    所以单次调用直接抛错。此时尚未写 R2，重试会真正重新转换。
@@ -339,7 +341,9 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
  * @param {Request} request 入站请求
  * @param {Object} env wrangler 注入的环境变量（含 vars + secrets）
  * @param {ExecutionContext} ctx Workers 执行上下文，供 Markdown 管线后台写 R2
- * @param {(html: string, target: string) => string} [transform] 对最终 HTML 的可选改写钩子
+ * @param {(html: string, target: string, isMarkdown: boolean) => string} [transform]
+ *   对最终 HTML 的可选改写钩子。第三个参数标明走的是 Markdown 管线还是
+ *   HTML 管线，钩子据此做只有某一管线才需要的处理。
  * @param {string} [prefix="/html/"] 路由前缀，调用方按自己路径传入（如 "/wechat/"）
  * @returns {Response}
  */
@@ -399,7 +403,7 @@ export async function serveHtml(request, env, ctx, transform, prefix = "/html/")
         new Response(upstream.body, { status: upstream.status, headers })
       );
       const html = await transformed.text();
-      const finalHtml = transform(html, target);
+      const finalHtml = transform(html, target, false);
       return new Response(finalHtml, { status: upstream.status, headers });
     }
 
@@ -411,7 +415,7 @@ export async function serveHtml(request, env, ctx, transform, prefix = "/html/")
     // 改写失败时降级：重新请求一次，直接返回原始 HTML，保证页面至少能看
     const fallback = await fetchUpstream(target, ua);
     const rawHtml = await fallback.text();
-    const finalHtml = transform ? transform(rawHtml, target) : rawHtml;
+    const finalHtml = transform ? transform(rawHtml, target, false) : rawHtml;
     return new Response(finalHtml, { status: upstream.status, headers });
   }
 }
