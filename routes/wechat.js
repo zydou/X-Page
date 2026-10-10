@@ -8,6 +8,9 @@
  *
  * 复用方式：通过 serveHtml 的 transform 钩子注入 wrapTitleLink。
  *
+ * 内容协商：Accept: text/markdown 时交给 serveHtml 的 Markdown 管线，
+ * 返回 Markdown 文本（标题同样包着可点回原文的链接）。
+ *
  * 标题 DOM 特征：<h1 class="rich_media_title" id="activity-name">
  * 非微信公众号页面不会命中，退化为与 /html/ 相同行为，不报错。
  * ============================================================
@@ -110,11 +113,14 @@ function wrapTitleLink(html, target) {
  * 处理 /wechat/<encoded> 请求。
  *
  * 流程：
+ *   0. Accept: text/markdown → 直接交给 serveHtml 的 Markdown 管线返回，
+ *      不经过下面这段 HTML 缓存（否则会把缓存 HTML 喂给要 Markdown 的客户端）
  *   1. 查 R2（key = `wechat/<原文URL>`）：命中直接返回缓存 HTML
  *   2. 未命中 → 复用 serveHtml 抓取 + 改写，后台写回 R2
  *   3. 抓取失败（原文删除 / 不可达）→ 原样返回错误（首次无缓存可回退）
  *
  * 无 refresh 入口：命中即缓存，内容以首次抓取为准。
+ * Markdown 变体有独立 R2 key（`md/wechat/<原文URL>`），支持 ?refresh= 重转。
  *
  * @param {Request} request
  * @param {Object} env 含 R2 绑定 TWEETS（与 tweets 共用同一桶；可空，无绑定则退化为纯代理）
@@ -135,6 +141,12 @@ export async function serveWechat(request, env, ctx) {
   }
   if (!/^https?:\/\//i.test(target)) target = "http://" + target;
 
+  // Markdown 协商必须先短路：下面 R2 命中分支会无视 Accept 直接返回缓存 HTML。
+  // 交给 serveHtml 的独立管线处理，它按路由前缀隔离出自己的 md/wechat/ R2 key。
+  if ((request.headers.get("accept") || "").includes("text/markdown")) {
+    return serveHtml(request, env, ctx, wrapTitleLink, "/wechat/");
+  }
+
   // R2 key：直接用原文 URL 作为唯一标识（R2 key 支持任意 UTF-8 字符串）
   const r2Key = "wechat/" + target;
 
@@ -150,6 +162,7 @@ export async function serveWechat(request, env, ctx) {
               "content-type": "text/html; charset=utf-8",
               "cache-control": "public, max-age=31556952",
               "access-control-allow-origin": "*",
+              "vary": "Accept",
               "x-cache": "hit",
             },
           });
@@ -161,7 +174,7 @@ export async function serveWechat(request, env, ctx) {
   }
 
   // 第二步：R2 miss → 抓取 + 渲染（复用 /html/ 的 serveHtml）
-  const resp = await serveHtml(request, env, wrapTitleLink, "/wechat/");
+  const resp = await serveHtml(request, env, ctx, wrapTitleLink, "/wechat/");
   if (!resp.ok) return resp;
 
   const html = await resp.text();
@@ -172,9 +185,12 @@ export async function serveWechat(request, env, ctx) {
     );
   }
 
+  // Vary: Accept —— 同一 URL 现在也有 text/markdown 变体，
+  // 边缘必须按 Accept 区分，否则缓存会串。
   const headers = new Headers(resp.headers);
   headers.set("content-type", "text/html; charset=utf-8");
   headers.set("cache-control", "public, max-age=31556952");
+  headers.set("vary", "Accept");
   headers.set("x-cache", "miss");
   return new Response(html, { status: resp.status, headers });
 }

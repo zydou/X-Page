@@ -24,9 +24,19 @@ fallthrough = true
 #   tweet/ 前缀 365 天过期：
 #     npx wrangler r2 bucket lifecycle add x-page expire-tweets-after-1y tweet/ --expire-days 365
 #   wechat/ 前缀无过期规则，默认永久保留（防失效优先）
+#   md/ 前缀（/html/ 与 /wechat/ 的 text/markdown 变体）同样永久保留：
+#     免费套餐 Browser Run 配额极小（1 次/10 秒、10 分钟/天），必须让每个
+#     URL 一生只转换一次，所以故意不配过期。需要强刷新用 ?refresh= 重转。
 [[r2_buckets]]
 binding = "TWEETS"
 bucket_name = "x-page"
+
+# Browser Run 绑定：/html/ 与 /wechat/ 的 Accept: text/markdown 转换用它。
+# 前提是 compatibility_date >= 2026-03-24（本文件为 2026-07-01，满足）。
+# remote = true 让 `npx wrangler dev` 也能调真实转换服务（本地起不了浏览器）。
+[browser]
+binding = "BROWSER"
+remote = true
 
 # Build: download & build remote assets (CSS, JS) before uploading.
 # This lets `npx wrangler deploy` work out of the box after cloning,

@@ -31,21 +31,12 @@
 import {
   extractPid,
   formatDate,
+  estimateTokens,
   makeUrlClickable,
   authorTag,
   buildMediaTag,
   proxyUrl,
 } from "../lib/utils.js";
-
-/**
- * 粗略估算 token 数：中文字符按 2 字符/token，其他按 4 字符/token。
- * 比统一 /4 更贴近中英混排场景的真实 tokenizer 行为。
- */
-function estimateTokens(text) {
-  const chinese = (text.match(/[一-鿿]/g) || []).length;
-  const other = text.length - chinese;
-  return Math.ceil(chinese / 2 + other / 4);
-}
 
 /**
  * 推文字号解析：内联样式的 <b>/<i> 渲染。

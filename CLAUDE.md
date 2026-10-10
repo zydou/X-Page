@@ -17,7 +17,9 @@ x-page/
 │   ├── wechat.js            # /wechat/<url> → WeChat article HTML
 │   └── tweet.js             # /<user>/status/<id>[?mode=] → tweet HTML
 ├── lib/
-│   └── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
+│   ├── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
+│   ├── markdown.js          # markdown → HTML (markdown-it + highlight.js), used by /github/
+│   └── browser-run.js       # HTML → markdown (Browser Run quick action), used by /html/ + /wechat/
 ├── wrangler.toml            # service config, env vars, observability, Text module rules
 ├── water.css                # base styles for tweet HTML (CI-fetched, Text-module inlined)
 ├── twitter.css              # tweet-specific overrides (Text-module inlined)
@@ -35,8 +37,8 @@ x-page/
 | `/vid/d/<raw-url>`               | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`                 | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
 | `/img/d/<raw-url>`               | Image → adaptive HTML (direct) |
-| `/html/<raw-url>`                | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs) |
-| `/wechat/<raw-url>`              | WeChat article fetch (title links back to original) |
+| `/html/<raw-url>`                | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs); `Accept: text/markdown` → markdown |
+| `/wechat/<raw-url>`              | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
 | `/proxy/<raw-url>`               | Generic passthrough proxy; rewrites JS/CSS relative URLs |
 | `/github/<user>/<repo>[/<path>]` | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
 | `/`                              | Unified usage page (zh/en) |
@@ -57,6 +59,30 @@ The `/html/` route (`routes/html.js`) fetches the target page and rewrites it wi
 
 The `/proxy/` route (`routes/proxy.js`) additionally rewrites JS/CSS **content**: relative `import("./...")`, `from"./..."`, and `url(...")` references are converted to absolute proxy paths,
 so Vite-style chunk loading works through the proxy.
+
+### `Accept: text/markdown` (tweet / html / wechat)
+
+These three routes return `text/markdown` when the request's `Accept` header mentions
+`text/markdown`; otherwise they return HTML unchanged. **Every branch sets `Vary: Accept`** —
+without it the edge would serve a cached HTML response to a markdown client.
+
+Responses also carry `x-markdown-tokens` (CJK-aware estimate from `estimateTokens()` in `lib/utils.js`).
+
+The tweet route renders markdown from fxtwitter data itself. `/html/` and `/wechat/` instead go
+through Browser Run's `/markdown` quick action (`lib/browser-run.js`), with three constraints:
+
+- **Always `html=`, never `url=`.** Browser Run's browser requests are flagged as bot traffic by
+  Cloudflare and its Referer cannot be forged, so `url=` cannot retrieve WeChat article bodies.
+  The Worker fetches with its own UA and passes the HTML string in.
+- **The HTML must be pre-absolutised.** The converter's `html=` mode does not resolve relative URLs
+  (it emits `(/docs)` verbatim and drops `srcset` entirely), and markdown consumers have no base URL.
+  After `buildRewriter()`, internal `/proxy/` and `/html/` paths are prefixed with this Worker's
+  origin — which also makes media self-contained and hotlink-protection-safe.
+- **Results must be cached in R2** under `md/<route>/<target>`. Free-plan Quick Actions are limited
+  to 1 request / 10s and 10 minutes of browser time per day, so each URL is converted at most once
+  for its lifetime. `?refresh=1` forces a re-conversion. Failures return `502`/`406` and are never
+  written to R2.
+
 
 ## Inlined Assets (Text Module Rules)
 
@@ -89,6 +115,12 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrang
 | `TRANSLATE_TO` | BCP-47 language for tweet translation; blank = original |
 | `GITHUB_TOKEN` | Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
 | `UA`           | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
+
+Bindings: `env.TWEETS` → R2 bucket `x-page` / `x-page-dev` (keys `tweet/`, `wechat/`, `md/`);
+`env.BROWSER` → Browser Run, used only for the markdown conversion. `quickAction()` requires
+`compatibility_date >= 2026-03-24`; the `[browser]` block sets `remote = true` so that
+`npx wrangler dev` can reach the real service too.
+
 
 ### Local Development
 

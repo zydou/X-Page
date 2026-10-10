@@ -93,8 +93,9 @@ export default {
     }
 
     // HTML 抓取 + 改写代理（微信公众号文章阅读等）
+    // 传 ctx：Accept: text/markdown 时需要它把转换结果后台写回 R2
     if (cleanPath === "html" || cleanPath.startsWith("html/")) {
-      return serveHtml(request, env);
+      return serveHtml(request, env, ctx);
     }
 
     // 微信公众号文章专用代理（标题可点回原文）

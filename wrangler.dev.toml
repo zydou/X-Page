@@ -23,6 +23,11 @@ fallthrough = true
 binding = "TWEETS"
 bucket_name = "x-page-dev"
 
+# Browser Run 绑定：与 prod 一致，见 wrangler.toml 里的注释。
+[browser]
+binding = "BROWSER"
+remote = true
+
 # Build: download & build remote assets (CSS, JS) before uploading.
 [build]
 command = "sh build.sh"
