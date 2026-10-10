@@ -19,7 +19,7 @@ x-page/
 ├── lib/
 │   ├── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
 │   ├── markdown.js          # markdown → HTML (markdown-it + highlight.js), used by /github/
-│   └── browser-run.js       # HTML → markdown (Browser Run quick action), used by /html/ + /wechat/
+│   └── to-markdown.js       # HTML → markdown (Workers AI toMarkdown), used by /html/ + /wechat/
 ├── wrangler.toml            # service config, env vars, observability, Text module rules
 ├── water.css                # base styles for tweet HTML (CI-fetched, Text-module inlined)
 ├── twitter.css              # tweet-specific overrides (Text-module inlined)
@@ -69,19 +69,23 @@ without it the edge would serve a cached HTML response to a markdown client.
 Responses also carry `x-markdown-tokens` (CJK-aware estimate from `estimateTokens()` in `lib/utils.js`).
 
 The tweet route renders markdown from fxtwitter data itself. `/html/` and `/wechat/` instead go
-through Browser Run's `/markdown` quick action (`lib/browser-run.js`), with three constraints:
+through Workers AI `toMarkdown` (`lib/to-markdown.js`), with three constraints:
 
-- **Always `html=`, never `url=`.** Browser Run's browser requests are flagged as bot traffic by
-  Cloudflare and its Referer cannot be forged, so `url=` cannot retrieve WeChat article bodies.
-  The Worker fetches with its own UA and passes the HTML string in.
-- **The HTML must be pre-absolutised.** The converter's `html=` mode does not resolve relative URLs
-  (it emits `(/docs)` verbatim and drops `srcset` entirely), and markdown consumers have no base URL.
-  After `buildRewriter()`, internal `/proxy/` and `/html/` paths are prefixed with this Worker's
-  origin — which also makes media self-contained and hotlink-protection-safe.
-- **Results must be cached in R2** under `md/<route>/<target>`. Free-plan Quick Actions are limited
-  to 1 request / 10s and 10 minutes of browser time per day, so each URL is converted at most once
-  for its lifetime. `?refresh=1` forces a re-conversion. Failures return `502`/`406` and are never
-  written to R2.
+- **Always pass the fetched HTML string, never let the converter fetch the URL.** `/html/` and
+  `/wechat/` depend on a custom User-Agent (default iOS WeChat) plus Referer to retrieve bodies;
+  only the Worker can do that. The converter receives the already-fetched HTML as a blob.
+- **Relative URLs are resolved by injecting a `<base href>` tag.** After `buildRewriter()` every
+  `<a href>` is `/html/<abs>` and every media attribute is `/proxy/<abs>`, so no page-relative
+  links remain; pointing the base at this Worker's origin absolutises both internal path families.
+  `conversionOptions.html.hostname` is deliberately *not* used — it works over REST but is silently
+  ignored through the Workers AI binding (verified on x-dev: 78 links emitted relative). The
+  converter still drops `srcset` and `data-src`-only images, which is why `buildRewriter()`'s
+  srcset/`data-src`→`src` backfill must stay.
+- **Results must be cached in R2** under `md/<route>/<target>`. HTML conversion is deterministic
+  and model-free (0 Neurons), but a single page takes 130–330 ms and ~8% of requests show a
+  48–100 s tail, so each URL is converted at most once for its lifetime. `?refresh=1` forces a
+  re-conversion. Failures return `502`/`406` and are never written to R2. Input over ~4 MiB is
+  rejected fast by `MAX_INPUT_CHARS` — the service otherwise hangs ~41 s before erroring.
 
 
 ## Inlined Assets (Text Module Rules)
@@ -117,9 +121,10 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrang
 | `UA`           | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 
 Bindings: `env.TWEETS` → R2 bucket `x-page` / `x-page-dev` (keys `tweet/`, `wechat/`, `md/`);
-`env.BROWSER` → Browser Run, used only for the markdown conversion. `quickAction()` requires
-`compatibility_date >= 2026-03-24`; the `[browser]` block sets `remote = true` so that
-`npx wrangler dev` can reach the real service too.
+`env.AI` → Workers AI, used only for the markdown conversion. `toMarkdown()` on HTML is
+deterministic and model-free, so it consumes 0 Neurons and never touches the free plan's
+10,000 Neurons/day pool (verified on this free account, 2026-10). Note the markdown conversion
+feature carries a **Beta** badge in the Cloudflare docs nav — Workers AI itself is GA.
 
 
 ### Local Development

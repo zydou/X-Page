@@ -11,8 +11,8 @@
  *   - 仅对 text/html 做资源改写；非 HTML 原样透传
  *
  * 内容协商（Accept: text/markdown）：
- *   带上该头时改走 serveMarkdown——缓冲出完整 HTML、改写完再用 Browser
- *   Run 的 /markdown quick action 转成 Markdown 文本，结果落 R2 后返回。
+ *   带上该头时改走 serveMarkdown——缓冲出完整 HTML、改写完再用 Workers AI
+ *   的 toMarkdown 转成 Markdown 文本，结果落 R2 后返回。
  *   两条管线各自独立：HTML 走流式改写，Markdown 必须先拿到整篇字符串。
  *
  * 实现：使用 Cloudflare 原生 HTMLRewriter（流式、零依赖、自动解码
@@ -38,7 +38,7 @@
  */
 
 import { proxyUrl } from "../lib/utils.js";
-import { convertHtml, absolutizeInternal, markdownResponse } from "../lib/browser-run.js";
+import { convertHtml, markdownResponse } from "../lib/to-markdown.js";
 
 // 默认 UA：iOS 微信内置浏览器，可通过 wrangler.toml [vars] UA 覆盖
 const DEFAULT_UA =
@@ -166,8 +166,8 @@ function buildRewriter(base) {
       //（典型如微信公众号文章的 data-src）。
       //
       // 只有 srcset 没有 src 的情况也必须在 markdown 管线里补上：
-      // Browser Run 的转换会丢弃 srcset，产出 ![alt]() 空链接，图片整个丢失
-      //（实测：<img srcset="a.jpg 1x, b.jpg 2x" alt="x"> → ![x]()）。
+      // toMarkdown 同样丢弃 srcset 与只有 data-src 的图片，产出 ![alt]()
+      // 空链接，图片整个丢失（实测微信正文 9 张 data-src 懒加载图全丢）。
       // 取 srcset 最后一个条目（约定上通常是最清晰的一档），
       // 此时条目已被 proxySrcset 代理成 /proxy/ 路径。
       // 对 HTML 管线无害：srcset 存在时浏览器仍以 srcset 为准。
@@ -251,14 +251,14 @@ async function fetchUpstream(target, ua) {
 /**
  * Accept: text/markdown 的完整管线：
  *
- *   R2 查缓存 → 抓上游 → buildRewriter 改写资源 → 绝对化内部路径
- *   → Browser Run 转换 → 写回 R2
+ *   R2 查缓存 → 抓上游 → buildRewriter 改写资源
+ *   → Workers AI toMarkdown（零 Neuron）→ 写回 R2
  *
- * 免费套餐 Quick Actions 每 10 秒 1 次、浏览器时间 10 分钟/天，
- * 因此必须先查 R2：命中则零配额直接返回，未命中才转换一次并写回。
+ * 转换本身零配额，但单篇 130-330ms、实测约 8% 有 48-100 秒长尾，
+ * 因此仍然必须先查 R2：命中则直接返回，未命中才转换一次并写回。
  *
  * 与 HTML 管线的两点差异：
- *   - 必须缓冲出完整 HTML 字符串（quickAction 的 html= 需要整篇），
+ *   - 必须缓冲出完整 HTML 字符串（toMarkdown 需要整篇 blob），
  *     所以 HTML 那条零缓冲的流式输出路径在这里不可用
  *   - 转换失败时不降级成 HTML——返回明确的 502，让调用方能区分
  *     「这条 URL 暂时没有 Markdown」与「页面本身挂了」
@@ -273,7 +273,7 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
   // ?refresh= 强制重新转换，是 R2 永不过期带来的唯一逃生口
   const refresh = url.searchParams.has("refresh");
 
-  // 1. R2 命中 → 直接返回，不消耗任何浏览器配额
+  // 1. R2 命中 → 直接返回，跳过抓取与转换
   if (bucket && !refresh) {
     const obj = await bucket.get(mdKey);
     if (obj) {
@@ -291,38 +291,34 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
     return new Response("not html", { status: 406 });
   }
 
-  // 3. 缓冲 + 改写资源路径，再补全内部 /proxy/ /html/ 的绝对地址
+  // 3. 缓冲 + 改写资源路径。
   //    这里 content-type 只给 "text/html"：HTMLRewriter 不接受显式 charset
   //    （会抛 "Unknown character encoding"），与上面流式路径保持同一写法。
-  let fed;
+  //    相对链接的绝对化在 convertHtml 里通过注入 <base> 完成，不在此处处理。
+  let html;
   try {
-    const html = await (
+    html = await (
       await buildRewriter(target).transform(
         new Response(upstream.body, { status: upstream.status, headers: new Headers({ "content-type": "text/html" }) })
       )
     ).text();
-    fed = absolutizeInternal(transform ? transform(html, target) : html, url.origin);
   } catch (e) {
     return new Response("rewrite failed: " + (e && e.message ? e.message : String(e)), {
       status: 502,
     });
   }
+  if (transform) html = transform(html, target);
 
-  // 4. 转换（免费套餐配额的唯一消耗点）
-  //    convertHtml 内部已对 429 退避重试至 25 秒上限，
-  //    只有并发压力大到预算耗尽才会落到下面这个分支。
+  // 4. 转换。HTML 是确定性解析、零 Neuron 消耗，没有速率限制可退避，
+  //    所以单次调用直接抛错。此时尚未写 R2，重试会真正重新转换。
   let md;
   try {
-    md = await convertHtml(env.BROWSER, fed);
+    md = await convertHtml(env, html, url.origin);
   } catch (e) {
-    const msg = "markdown conversion failed: " + (e && e.message ? e.message : String(e));
-    // 退避预算耗尽（约 3 个以上并发的首次转换）才走到这里。透传 429 +
-    // Retry-After 让客户端按语义退避，而不是当成服务器故障立刻重试白撞。
-    // 注意此时没有写 R2，所以退避后的重试会真正重新转换。
-    if (e && e.status === 429) {
-      return new Response(msg, { status: 429, headers: { "retry-after": e.retryAfter || "10" } });
-    }
-    return new Response(msg, { status: 502 });
+    return new Response(
+      "markdown conversion failed: " + (e && e.message ? e.message : String(e)),
+      { status: 502 }
+    );
   }
 
   // 5. 写回 R2（后台执行，失败不影响本次响应）

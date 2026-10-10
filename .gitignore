@@ -1,4 +1,6 @@
 .wrangler/
+# wrangler r2 object get 的本地落盘目录（按 R2 key 建目录），不是源码
+md/
 # 全局 gitignore 屏蔽了 lib/，但本项目的 lib/utils.js 是源码，需要提交
 !lib/
 # Generated assets —— 由 wrangler.toml [build] 的 build.sh 在部署前从 CDN 下载并构建。
