@@ -87,13 +87,21 @@ through Workers AI `toMarkdown` (`lib/to-markdown.js`), with three constraints:
   re-conversion. Failures return `502`/`406` and are never written to R2. Input over ~4 MiB is
   rejected fast by `MAX_INPUT_CHARS` — the service otherwise hangs ~41 s before erroring.
 
-`/wechat/` additionally cuts the footer chrome off the **markdown variant only**: `toMarkdown` does
-not honour `display:none`, so WeChat's bottom toolbar (修改于 / 不喜欢), QR-code dialogs and share
-panel all leak into the tail. `routes/wechat.js` truncates the HTML at `<div id="js_tags_preview_toast">`
-— the anchor WeChat's client uses for the "预览时标签不可点" toast, present exactly once per document,
-with the footer chrome following it. The HTML variant is left intact: those divs are invisible there
-anyway, and trimming would change the route's faithful-rendering behaviour. This is why `serveHtml`'s
-`transform` hook takes an `isMarkdown` flag.
+`/wechat/` additionally strips two blocks of client-injected DOM off the **markdown variant only**:
+`toMarkdown` does not honour `display:none`, so elements WeChat renders invisible still get extracted.
+`routes/wechat.js` removes
+
+- the footer chrome, by truncating at `<div id="js_tags_preview_toast">` — the anchor for the
+  "预览时标签不可点" toast, present exactly once per document, with the bottom toolbar (修改于 /
+  不喜欢), QR-code dialogs and share panel after it
+- the novel-reader promo card, by slicing from `<div id="js_novel_card">` up to the `#js_content`
+  opening tag — the card's closing tag sits directly before `#js_content`, so no div-depth counting
+  is needed. The byline (`#meta_content`, `#js_profile_card`) sits before the card and is kept
+
+Both anchors are WeChat client JS-hook ids rather than text content — ids are stable, copy is not.
+The HTML variant is left intact: those divs carry `display:none` and are invisible there anyway, and
+trimming would change the route's faithful-rendering behaviour. This is why `serveHtml`'s `transform`
+hook takes an `isMarkdown` flag.
 
 
 ## Inlined Assets (Text Module Rules)

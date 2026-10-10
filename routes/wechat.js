@@ -7,7 +7,7 @@
  * <a href="原文链接">，方便用户在嵌入环境里点标题跳转。
  *
  * 复用方式：通过 serveHtml 的 transform 钩子注入 transformWechat
- * （标题包链接 + Markdown 变体额外截掉页脚 chrome）。
+ * （标题包链接 + Markdown 变体额外删掉两块用户不可见的推广/页脚 DOM）。
  *
  * 内容协商：Accept: text/markdown 时交给 serveHtml 的 Markdown 管线，
  * 返回 Markdown 文本（标题同样包着可点回原文的链接）。
@@ -110,22 +110,41 @@ function wrapTitleLink(html, target) {
   );
 }
 
-// 页脚 chrome 的起点。这个 div 的 id 是微信客户端固定用来弹「预览时标签不可点」
-// toast 的锚点，每篇文档恰好出现一次，它之后全是底部工具栏（修改于 / 不喜欢）、
-// 二维码弹窗、分享面板、作者头像等——全是 display:none 的用户不可见元素。
-// 但 toMarkdown 不做视觉渲染，只抽文本，这些隐藏元素会整段漏进 Markdown 尾部。
-// 锚在元素 id 而非提示文案上：id 是客户端 JS 钩子，文案会改。
+// Markdown 变体要删掉两块微信客户端注入的推广 / 页脚 DOM。两者都带
+// style="display: none" —— 用户在浏览器里根本看不到，但 toMarkdown 不做视觉
+// 渲染、不认 display:none，会把它们整段抽进 Markdown。
+//
+// 锚点一律用微信客户端的 JS 钩子 id（js_* / activity-name），不用文案：
+// 文案会改，id 是客户端代码要抓的节点，稳定。
 const FOOTER_ANCHOR = /<div\b[^>]*\bid="js_tags_preview_toast"/i;
+const NOVEL_CARD_ANCHOR = /<div\b[^>]*\bid="js_novel_card"/i;
+const CONTENT_ANCHOR = /<div\b[^>]*\bid="js_content"/i;
 
+// 页脚 chrome 起点：它之后全是底部工具栏（修改于 / 不喜欢）、二维码弹窗、
+// 分享面板、作者头像等。
 function cutWechatFooter(html) {
   const m = FOOTER_ANCHOR.exec(html);
   return m ? html.slice(0, m.index) : html;
 }
 
+// 正文前的小说阅读器推广卡片。它紧挨着正文容器，闭合标签就贴在
+// #js_content 开标签前面，所以直接切「卡片开头 → 正文开头」这一段，
+// 不用数 div 深度。卡片里的「在小说阅读器读本章 / 去阅读 / 在公众号小说中
+// 沉浸阅读」正是这样被清掉的；再往前的署名（#meta_content、#js_profile_card）
+// 不在这一段内，按用户要求保留。
+function cutWechatNovelCard(html) {
+  const start = NOVEL_CARD_ANCHOR.exec(html);
+  if (!start) return html;
+  const end = CONTENT_ANCHOR.exec(html);
+  if (!end || end.index < start.index) return html;
+  return html.slice(0, start.index) + html.slice(end.index);
+}
+
 /**
- * /wechat/ 的 transform 钩子：包标题链接，并在 Markdown 变体上截掉页脚 chrome。
+ * /wechat/ 的 transform 钩子：包标题链接，并在 Markdown 变体上删掉两块
+ * 用户不可见的推广 / 页脚 DOM。
  *
- * 只对 Markdown 管线截断——HTML 视图里那些 div 本来就是 display:none，
+ * 只对 Markdown 管线删——HTML 视图里那些 div 本来就是 display:none，
  * 保留它们才能维持 /wechat/「完整渲染原文」的语义。
  *
  * @param {string} html
@@ -135,7 +154,8 @@ function cutWechatFooter(html) {
  */
 function transformWechat(html, target, isMarkdown) {
   const wrapped = wrapTitleLink(html, target);
-  return isMarkdown ? cutWechatFooter(wrapped) : wrapped;
+  if (!isMarkdown) return wrapped;
+  return cutWechatFooter(cutWechatNovelCard(wrapped));
 }
 
 /**
