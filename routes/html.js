@@ -309,12 +309,14 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
   }
 
   // 4. 转换（免费套餐配额的唯一消耗点）
+  //    convertHtml 内部已对 429 退避重试至 25 秒上限，
+  //    只有并发压力大到预算耗尽才会落到下面这个分支。
   let md;
   try {
     md = await convertHtml(env.BROWSER, fed);
   } catch (e) {
     const msg = "markdown conversion failed: " + (e && e.message ? e.message : String(e));
-    // 免费套餐是 1 次/10 秒，Agent 批量抓取必然撞 429。此时透传 429 +
+    // 退避预算耗尽（约 3 个以上并发的首次转换）才走到这里。透传 429 +
     // Retry-After 让客户端按语义退避，而不是当成服务器故障立刻重试白撞。
     // 注意此时没有写 R2，所以退避后的重试会真正重新转换。
     if (e && e.status === 429) {
