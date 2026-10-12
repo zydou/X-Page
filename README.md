@@ -174,7 +174,7 @@ npx wrangler secret put GITHUB_TOKEN
 | 变量           | 默认值                | 说明 |
 | -------------- | --------------------- | ---- |
 | `TIMEZONE`     | `Asia/Shanghai`       | 时区，用于推文时间显示 |
-| `TRANSLATE_TO` | `zh-cn`               | 推文翻译目标语言（BCP-47），留空则返回原文。可被单条链接的 `?lang=` 覆盖 |
+| `TRANSLATE_TO` | `cn`                  | 推文翻译目标语言（BCP-47），留空则返回原文。可被单条链接的 `?lang=` 覆盖。fxtwitter 会把 `cn` 归一化为 `zh-cn`，两者等价 |
 | `UA`           | iOS 微信内置浏览器 UA | `/html/` 路由抓取时的 User-Agent，用于绕过微信公众号白名单限制 |
 | `GITHUB_TOKEN` | （空）                | 可选，GitHub Personal Access Token（**权限留空即可**，详见上方说明）。以 Worker Secret 形式存储（`wrangler secret put`），不写入本文件。提升 `/github/` 路由的 API 限流配额（60次/h → 5000次/h） |
 
