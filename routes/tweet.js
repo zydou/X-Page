@@ -3,7 +3,7 @@
  * ============================================================
  * X / Twitter 推文 → 自包含 HTML 的主路由。
  *
- * 路由形态：/<username>/status/<tweet_id>[?mode=<mode>][&refresh]
+ * 路由形态：/<username>/status/<tweet_id>[?mode=<mode>][&lang=<lang>][&refresh]
  *
  * 解析模式（?mode=，缺省 = all，非法值同样回退 all）：
  *   all    fxtwitter 返回的完整 thread（含本推的祖先推文）+ 每条的引用，历史默认行为
@@ -11,13 +11,20 @@
  *   quote  本推 + 本推引用
  *   thread 本推 + 本推的串推后代（剔除祖先推文）
  *
+ * 翻译语言（?lang=）：
+ *   - 查询参数优先于 TRANSLATE_TO 环境变量；两者都缺省时不翻译
+ *   - lang 原样透传给 fxtwitter（/2/thread/<id>?lang=<lang>），返回的
+ *     translation 字段按该语言给出译文
+ *   - R2 key 带语言维度（tweet/<id>.<lang>.json）：不同 lang 的译文不同，
+ *     必须各存一份，否则 ?lang=ja 会命中 ?lang=zh-cn 的缓存
+ *
  * 完整渲染流水线：
- *   1. parseMode()            从 query 提取解析模式
- *   2. extractPid()           从路径提取推文 ID
- *   3. publish()              调 fxtwitter API 拉取 thread + 推文详情
- *   4. threadDescendants()    从 thread 中筛出本推的串推后代（剔除祖先）
- *   5. renderPost()           单条推文 → HTML（头部 + 正文 + article + 媒体 + 引用）
- *   6. wrapHtml()             用 water.css + twitter.css 包裹生成最终页
+ *   1. parseMode() / parseLang()  从 query 提取解析模式与翻译语言
+ *   2. extractPid()               从路径提取推文 ID
+ *   3. fetchTweetData()           取 thread 数据（R2 命中 → 回源 fxtwitter 并写回 R2）
+ *   4. threadDescendants()        从 thread 中筛出本推的串推后代（剔除祖先）
+ *   5. renderPost()               单条推文 → HTML（头部 + 正文 + article + 媒体 + 引用）
+ *   6. wrapHtml()                 用 water.css + twitter.css 包裹生成最终页
  *
  * 资产注入：
  *   - waterCss / twitterCss 由 worker.js 通过参数注入
@@ -256,6 +263,25 @@ function parseMode(raw) {
   return MODES.includes(raw) ? raw : "all";
 }
 
+/** lang 的形状：BCP-47 语言标签（ja / zh-cn / pt-BR 等） */
+const LANG_RE = /^[A-Za-z]{2,3}(-[A-Za-z]{2,8})?$/;
+
+/**
+ * 解析 ?lang= 查询参数。
+ *
+ * 只接受 BCP-47 形态的语言标签；缺省或任何非法值返回空串（由调用方
+ * 回退到 TRANSLATE_TO 环境变量），不做 400——与 parseMode 同理。
+ * 做形状校验是因为 lang 会拼进 R2 key，
+ * 不能让它把路径分隔符等字符带进 key。
+ *
+ * @param {string|null} raw URL 上的原始 lang 值
+ * @returns {string} 规范化后的语言标签，无翻译时为空串
+ */
+function parseLang(raw) {
+  if (typeof raw !== "string" || !raw) return "";
+  return LANG_RE.test(raw) ? raw : "";
+}
+
 /**
  * 从 fxtwitter 的 data.thread 中筛出"本推的串推后代"。
  *
@@ -329,126 +355,33 @@ function renderPost(post, opt) {
 }
 
 /**
- * 推文主流程：调 fxtwitter API 并拼出整页 thread HTML。
+ * 把 fxtwitter 数据拼成整页 thread HTML（纯渲染，不做任何 I/O）。
  *
- * fxtwitter API 说明：
- *   - /2/thread/<id>     返回 { status, thread[] }，thread 是按时间排序的多条推文
- *   - ?lang=zh-cn        启用翻译字段（data.translation.text）
- *
- * 缓存策略：
- *   - R2 持久层：key = `tweet/<id>.json`
- *   - 命中规则：R2 有对象就用 R2，没有任何"应用层过期"判断
- *   - 唯一会回源的触发：用户主动点击 ?refresh=1（页面刷新按钮）
- *   - R2 兜底清理：lifecycle 规则在 365 天后删除（见 wrangler R2 配置）
+ * 数据获取在 fetchTweetData() 完成：HTML 与 Markdown 两条输出路径
+ * 共用同一份数据，缓存与回源逻辑只有一份。
  *
  * 渲染顺序：
- *   1. 查 R2（无绑定 / refresh=1 / R2 miss 时跳过）→ 拿到 JSON
- *   2. 否则拉 thread API，写回 R2
- *   3. all 模式：完整 thread 按 created_timestamp 升序渲染（thread 不一定有序），
+ *   1. all 模式：完整 thread 按 created_timestamp 升序渲染（thread 不一定有序），
  *      每条推文都展开引用——与旧实现逐字节一致，含本推的祖先推文
- *   4. 其他模式以本推为起点：self 只渲染本推；quote 追加本推引用；
+ *   2. 其他模式以本推为起点：self 只渲染本推；quote 追加本推引用；
  *      thread 追加 threadDescendants() 筛出的串推后代（剔除祖先推文）
- *   5. wrapHtml 拼接 <head> + <style>
+ *   3. wrapHtml 拼接 <head> + <style>
  *
  * 注意：status.author.name 作为 og:site_name 写进 <head>，
  * 便于消息预览机器人识别"谁在说话"。
  *
- * @param {string} rawPath 原始路径（含 username/status/ 前缀）
- * @param {{lang: string, tz: string}} cfg 时区与翻译语言配置
+ * @param {Object|null} data fxtwitter thread 对象（fetchTweetData 返回值）
+ * @param {{tz: string}} cfg 时区配置
  * @param {"all"|"self"|"quote"|"thread"} mode 解析模式（见文件头）
  * @param {string} waterCss water.css 源码字符串
  * @param {string} twitterCss twitter.css 源码字符串
- * @param {boolean} [refresh] 是否强制刷新（绕过 R2，强制调 API）
+ * @param {string} rawPath 原始路径（含 username/status/ 前缀），供缺 url 的推文做回退链接
  * @param {string} [refreshUrl] 刷新按钮的链接 URL
- * @param {Object} [env] Worker 环境（含 R2 绑定 TWEETS 与 ctx）
- * @param {Object} [ctx] Worker ExecutionContext（用于 waitUntil 后台回写）
- * @returns {Promise<{html: string, fallback: boolean, empty: boolean}>} HTML + 是否走了 R2 兜底（refresh 失败时）+ body 是否为空
+ * @returns {{html: string, empty: boolean}} HTML + body 是否为空
  */
-async function publish(rawPath, cfg, mode, waterCss, twitterCss, refresh, refreshUrl, env, ctx) {
-  const { lang, tz } = cfg;
+function renderHtml(data, cfg, mode, waterCss, twitterCss, rawPath, refreshUrl) {
+  const { tz } = cfg;
   const pid = extractPid(rawPath);
-  if (!pid) return "";
-
-  // R2 key：避免解析 URL，pid 已经是纯数字 ID
-  const r2Key = `tweet/${pid}.json`;
-
-  let data = null;
-  // 记录 R2 兜底数据，仅在 refresh 模式 + fxtwitter 失败时使用
-  let fallbackFromR2 = null;
-  let fallback = false;
-
-  // 第一步：尝试 R2
-  // - 非 refresh 模式：命中就用
-  // - refresh 模式：先记下来备用，fxtwitter 失败时回退
-  if (env?.TWEETS) {
-    const obj = await env.TWEETS.get(r2Key);
-    if (obj) {
-      try {
-        const parsed = JSON.parse(await obj.text());
-        if (refresh) {
-          fallbackFromR2 = parsed;
-        } else {
-          data = parsed;
-        }
-      } catch {
-        // 损坏的 JSON 忽略
-      }
-    }
-  }
-
-  // 第二步：data 未拿到 → 拉 fxtwitter 并写回 R2
-  if (!data) {
-    let apiUrl = lang
-      ? `https://api.fxtwitter.com/2/thread/${pid}?lang=${encodeURIComponent(lang)}`
-      : `https://api.fxtwitter.com/2/thread/${pid}`;
-    if (refresh) {
-      apiUrl += `${apiUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
-    }
-    let resp;
-    try {
-      resp = await fetch(apiUrl, {
-        headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
-        signal: AbortSignal.timeout(3000),
-        cf: refresh
-          ? { cacheTtl: 0, cacheEverything: true }
-          : { cacheTtl: 31556952, cacheEverything: true },
-      });
-    } catch (e) {
-      // 网络层失败（超时、DNS、TLS 等）：refresh 模式下回退到 R2
-      if (fallbackFromR2) {
-        data = fallbackFromR2;
-        fallback = true;
-      } else {
-        throw e;
-      }
-    }
-    if (!data) {
-      if (!resp.ok) {
-        // HTTP 4xx/5xx：refresh 模式下回退到 R2
-        if (fallbackFromR2) {
-          data = fallbackFromR2;
-          fallback = true;
-        } else {
-          throw new Error(`fxtwitter API ${resp.status}`);
-        }
-      } else {
-        data = await resp.json();
-        // 异步写回 R2（不阻塞响应）；thread 为空说明是瞬时空响应，不写缓存以免污染一年
-        if (env?.TWEETS && ctx && (data?.thread?.length ?? 0) > 0) {
-          const bucket = env.TWEETS;
-          const body = JSON.stringify(data);
-          const key = r2Key;
-          ctx.waitUntil(
-            bucket.put(key, body, {
-              httpMetadata: { contentType: "application/json" },
-            }).catch(() => {
-              // R2 写失败不影响本次响应，下次请求会重新拉
-            })
-          );
-        }
-      }
-    }
-  }
 
   const thisAuthor = data?.status?.author?.name ?? "Anonymous";
   const base = { url: rawPath, tz, refreshUrl };
@@ -480,7 +413,7 @@ async function publish(rawPath, cfg, mode, waterCss, twitterCss, refresh, refres
   // 清理空段落
   fullHtml = fullHtml.trim().replace(/<p><\/p>/g, "");
   // empty 标记：body 无任何内容时禁止边缘缓存，避免瞬时异常渲染被缓存整整一年
-  return { html: wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss), fallback, empty: fullHtml.length === 0 };
+  return { html: wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss), empty: fullHtml.length === 0 };
 }
 
 /**
@@ -659,12 +592,11 @@ function parseAtomicMarkdown(entities, article) {
 
 /**
  * 将 fxtwitter 完整数据渲染为完整 Markdown 文档。
- * 逻辑与 publish() 保持一致（mode 过滤、排序、引用展开等）。
+ * 与 renderHtml() 保持同一套逻辑（mode 过滤、排序、引用展开等）。
  */
 function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
   const { tz } = cfg;
   const thread = data?.thread ?? [];
-  const thisAuthor = data?.status?.author?.name ?? "Anonymous";
   const byTs = (a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0);
   const base = { tz, refreshUrl };
 
@@ -690,10 +622,10 @@ function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
 /**
  * /<user>/status/<id> 路由的主入口。
  *
- * 拆分 publish 之外的原因：
+ * 数据获取（fetchTweetData）与渲染（renderHtml / renderMarkdown）分离，
+ * 本函数只做三件事：
+ *   - 解析 query 参数（mode / lang / refresh）与环境变量，拼出 cfg 与 refreshUrl
  *   - 错误处理（API 超时 / JSON 解析失败）集中在此
- *   - 环境变量读取（TIMEZONE / TRANSLATE_TO）留在路由层，
- *     避免污染 publish 的可测试性
  *   - 支持 Accept: text/markdown 协商，返回纯 Markdown（供 Agent / CLI 直接消费）
  *
  * @param {Request} request 原始请求
@@ -701,17 +633,21 @@ function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
  * @param {string} cleanPath 去首斜杠 + decode 后的路径
  * @param {string} waterCss water.css 源码字符串
  * @param {string} twitterCss twitter.css 源码字符串
- * @returns {Response} 推文 HTML 或 Markdown，或错误页面（404/502）
+ * @returns {Response} 推文 HTML 或 Markdown，或错误页面（400/404/502）
  */
 export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, ctx) {
   const url = new URL(request.url);
   const refresh = url.searchParams.has("refresh");
   const mode = parseMode(url.searchParams.get("mode"));
-  // 刷新链接需带上 mode，否则点刷新按钮会跳回 all 模式
-  const refreshUrl = `/${cleanPath}?refresh=1` + (mode === "all" ? "" : `&mode=${mode}`);
+  // ?lang= 优先于 TRANSLATE_TO 环境变量；两者都缺省时不翻译
+  const lang = parseLang(url.searchParams.get("lang")) || (env && env.TRANSLATE_TO) || "";
+  // 刷新链接需带上 mode 与 lang，否则点刷新按钮会跳回默认参数
+  const refreshUrl = `/${cleanPath}?refresh=1`
+    + (mode === "all" ? "" : `&mode=${mode}`)
+    + (lang ? `&lang=${lang}` : "");
   const cfg = {
     tz: (env && env.TIMEZONE) || "UTC",
-    lang: (env && env.TRANSLATE_TO) || "",
+    lang,
   };
 
   const pid = extractPid(cleanPath);
@@ -723,9 +659,10 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
   const wantsMarkdown = accept.includes("text/markdown");
 
   try {
+    // HTML 与 Markdown 共用同一次数据获取（R2 命中 → 回源 fxtwitter 并写回 R2）
+    const { data, fallback } = await fetchTweetData(cleanPath, cfg, refresh, env, ctx);
+
     if (wantsMarkdown) {
-      // Markdown 模式：复用数据获取逻辑，改用 Markdown 渲染器
-      const data = await fetchTweetData(cleanPath, cfg, refresh, refreshUrl, env, ctx);
       if (!data || !data.status) {
         return new Response("Tweet not found", { status: 404 });
       }
@@ -743,20 +680,8 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
     }
 
     // 默认 HTML 模式
-    const { html, fallback, empty } = await publish(
-      cleanPath,
-      cfg,
-      mode,
-      waterCss,
-      twitterCss,
-      refresh,
-      refreshUrl,
-      env,
-      ctx
-    );
-    if (!html) {
-      return new Response("Invalid tweet URL", { status: 400 });
-    }
+    if (!data) return new Response("Invalid tweet URL", { status: 400 });
+    const { html, empty } = renderHtml(data, cfg, mode, waterCss, twitterCss, cleanPath, refreshUrl);
 
     // 空页面（body 无内容）不缓存：瞬时空响应一旦被边缘缓存会顶住整整一年
     const headers = {
@@ -775,19 +700,43 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
 }
 
 /**
- * 仅获取推文数据（不渲染），供 Markdown 模式复用。
- * 逻辑与 publish() 的数据获取部分完全一致。
+ * 获取 fxtwitter thread 数据（不做渲染）。
+ * HTML 与 Markdown 两条输出路径共用它，回源与缓存逻辑只有一份实现。
+ *
+ * fxtwitter API：
+ *   - /2/thread/<id>         返回 { status, thread[] }
+ *   - /2/thread/<id>?lang=X  额外返回 translation 字段（按 X 翻译的译文）
+ *
+ * 缓存策略：
+ *   - R2 持久层，key 带语言维度：`tweet/<id>.<lang>.json`（无翻译时 `tweet/<id>.json`）
+ *     不同 lang 的译文不同，必须各存一份，否则请求 A 语言会命中 B 语言的缓存
+ *   - 命中规则：R2 有对象就用 R2，没有任何"应用层过期"判断
+ *   - 唯一会回源的触发：用户主动点击 ?refresh=1（页面刷新按钮）
+ *   - R2 兜底清理：lifecycle 规则在 365 天后删除（见 wrangler R2 配置）
+ *
+ * @param {string} rawPath 原始路径（含 username/status/ 前缀）
+ * @param {{lang: string}} cfg 翻译语言配置
+ * @param {boolean} [refresh] 是否强制刷新（绕过 R2，强制调 API）
+ * @param {Object} [env] Worker 环境（含 R2 绑定 TWEETS）
+ * @param {Object} [ctx] Worker ExecutionContext（用于 waitUntil 后台回写）
+ * @returns {Promise<{data: Object|null, fallback: boolean}>} 推文数据；fallback = 是否回退到了 R2 旧数据
  */
-async function fetchTweetData(rawPath, cfg, refresh, refreshUrl, env, ctx) {
+async function fetchTweetData(rawPath, cfg, refresh, env, ctx) {
   const { lang } = cfg;
   const pid = extractPid(rawPath);
-  if (!pid) return null;
+  if (!pid) return { data: null, fallback: false };
 
-  const r2Key = `tweet/${pid}.json`;
+  // R2 key 带上语言维度：同一推文的 ja / zh-cn 译文各不相同
+  const r2Key = lang ? `tweet/${pid}.${lang}.json` : `tweet/${pid}.json`;
+
   let data = null;
+  // 记录 R2 兜底数据，仅在 refresh 模式 + fxtwitter 失败时使用
   let fallbackFromR2 = null;
+  let fallback = false;
 
-  // 1. 尝试 R2
+  // 第一步：尝试 R2
+  // - 非 refresh 模式：命中就用
+  // - refresh 模式：先记下来备用，fxtwitter 失败时回退
   if (env?.TWEETS) {
     const obj = await env.TWEETS.get(r2Key);
     if (obj) {
@@ -795,18 +744,18 @@ async function fetchTweetData(rawPath, cfg, refresh, refreshUrl, env, ctx) {
         const parsed = JSON.parse(await obj.text());
         if (refresh) fallbackFromR2 = parsed;
         else data = parsed;
-      } catch { /* 损坏的 JSON 忽略 */ }
+      } catch {
+        // 损坏的 JSON 忽略
+      }
     }
   }
 
-  // 2. 未命中 → 拉 fxtwitter 并写回 R2
+  // 第二步：data 未拿到 → 拉 fxtwitter 并写回 R2
   if (!data) {
     let apiUrl = lang
-      ? `https://api.fxtwitter.com/2/thread/${pid}?lang=${encodeURIComponent(lang)}`
+      ? `https://api.fxtwitter.com/2/thread/${pid}?lang=${lang}`
       : `https://api.fxtwitter.com/2/thread/${pid}`;
-    if (refresh) {
-      apiUrl += `${apiUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
-    }
+    if (refresh) apiUrl += `${lang ? "&" : "?"}_t=${Date.now()}`;
     let resp;
     try {
       resp = await fetch(apiUrl, {
@@ -817,23 +766,31 @@ async function fetchTweetData(rawPath, cfg, refresh, refreshUrl, env, ctx) {
           : { cacheTtl: 31556952, cacheEverything: true },
       });
     } catch (e) {
-      if (fallbackFromR2) return fallbackFromR2;
-      throw e;
+      // 网络层失败（超时、DNS、TLS 等）：refresh 模式下回退到 R2
+      if (!fallbackFromR2) throw e;
+      data = fallbackFromR2;
+      fallback = true;
     }
-    if (!resp.ok) {
-      if (fallbackFromR2) return fallbackFromR2;
-      throw new Error(`fxtwitter API ${resp.status}`);
-    }
-    data = await resp.json();
-
-    // 异步写回 R2
-    if (env?.TWEETS && ctx && (data?.thread?.length ?? 0) > 0) {
-      ctx.waitUntil(
-        env.TWEETS.put(r2Key, JSON.stringify(data), {
-          httpMetadata: { contentType: "application/json" },
-        }).catch(() => {})
-      );
+    if (!data) {
+      if (!resp.ok) {
+        // HTTP 4xx/5xx：refresh 模式下回退到 R2
+        if (!fallbackFromR2) throw new Error(`fxtwitter API ${resp.status}`);
+        data = fallbackFromR2;
+        fallback = true;
+      } else {
+        data = await resp.json();
+        // 异步写回 R2（不阻塞响应）；thread 为空说明是瞬时空响应，不写缓存以免污染一年
+        if (env?.TWEETS && ctx && (data?.thread?.length ?? 0) > 0) {
+          ctx.waitUntil(
+            env.TWEETS.put(r2Key, JSON.stringify(data), {
+              httpMetadata: { contentType: "application/json" },
+            }).catch(() => {
+              // R2 写失败不影响本次响应，下次请求会重新拉
+            })
+          );
+        }
+      }
     }
   }
-  return data;
+  return { data, fallback };
 }

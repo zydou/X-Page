@@ -15,7 +15,7 @@ x-page/
 │   ├── image.js             # /img/<url> and /img/d/<url> → image viewer HTML
 │   ├── html.js              # /html/<url> → HTML fetch + rewrite
 │   ├── wechat.js            # /wechat/<url> → WeChat article HTML
-│   └── tweet.js             # /<user>/status/<id>[?mode=] → tweet HTML
+│   └── tweet.js             # /<user>/status/<id>[?mode=][&lang=] → tweet HTML
 ├── lib/
 │   ├── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
 │   ├── markdown.js          # markdown → HTML (markdown-it + highlight.js), used by /github/
@@ -32,7 +32,7 @@ x-page/
 
 | Path                             | Service |
 | -------------------------------- | ------- |
-| `/<user>/status/<id>[?mode=m]`  | Tweet → standalone HTML; `?mode=self` / `quote` / `thread` / `all`（缺省即 `all`，全部推文） |
+| `/<user>/status/<id>[?mode=m][&lang=l]` | Tweet → standalone HTML; `?mode=self` / `quote` / `thread` / `all`（缺省即 `all`，全部推文）；`?lang=` 覆盖 `TRANSLATE_TO`，R2 key 带语言维度（`tweet/<id>.<lang>.json`） |
 | `/vid/<raw-url>`                 | Video → player HTML (proxied, Range passthrough) |
 | `/vid/d/<raw-url>`               | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`                 | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
@@ -132,7 +132,7 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrang
 | Var            | Purpose |
 | -------------- | ------- |
 | `TIMEZONE`     | Tweet timestamp display timezone |
-| `TRANSLATE_TO` | BCP-47 language for tweet translation; blank = original |
+| `TRANSLATE_TO` | BCP-47 language for tweet translation; blank = original. `?lang=` on the URL overrides it |
 | `GITHUB_TOKEN` | Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
 | `UA`           | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 

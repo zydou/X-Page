@@ -18,8 +18,9 @@ fallthrough = true
 
 # R2 bucket 绑定（生产）：tweets 与 wechat 共用同一桶 x-page
 # key 前缀：
-#   tweet/<id>.json   → fxtwitter thread JSON（tweet 路由）
-#   wechat/<原文URL>   → 渲染后的完整 HTML（wechat 路由，防原文删除后失效）
+#   tweet/<id>.json        → fxtwitter thread JSON（未翻译）
+#   tweet/<id>.<lang>.json → 带翻译的 thread JSON（?lang= 或 TRANSLATE_TO），每种语言一份
+#   wechat/<原文URL>       → 渲染后的完整 HTML（wechat 路由，防原文删除后失效）
 # lifecycle 规则（已通过 CLI 配置）：
 #   tweet/ 前缀 365 天过期：
 #     npx wrangler r2 bucket lifecycle add x-page expire-tweets-after-1y tweet/ --expire-days 365

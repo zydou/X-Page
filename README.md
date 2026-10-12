@@ -43,6 +43,20 @@ https://<your-worker-domain>/{username}/status/{tweet_id}?mode=thread  # 本推 
 - 非法取值一律按 `all` 处理
 - 可与 `?refresh=1` 叠加，例如 `?mode=quote&refresh=1`
 
+#### 翻译语言（`?lang=`）
+
+默认用 `TRANSLATE_TO` 环境变量作为翻译目标语言（留空则返回原文）。
+`?lang=` 可以在单个链接上覆盖它，**优先级高于环境变量**：
+
+```txt
+https://<your-worker-domain>/{username}/status/{tweet_id}?lang=ja    # 日文
+https://<your-worker-domain>/{username}/status/{tweet_id}?mode=quote&lang=ja
+```
+
+- 取值为 BCP-47 语言标签，与上游 fxtwitter 一致（`ja` / `zh-cn` / `fr` …）
+- 非法取值一律按未指定处理（回退 `TRANSLATE_TO`），不会报错
+- 每种语言在 R2 里各存一份（`tweet/<id>.<lang>.json`），首次请求某个语言会回源一次
+
 ### 🎬 视频代理
 
 ```txt
@@ -160,7 +174,7 @@ npx wrangler secret put GITHUB_TOKEN
 | 变量           | 默认值                | 说明 |
 | -------------- | --------------------- | ---- |
 | `TIMEZONE`     | `Asia/Shanghai`       | 时区，用于推文时间显示 |
-| `TRANSLATE_TO` | `zh-cn`               | 推文翻译目标语言（BCP-47），留空则返回原文 |
+| `TRANSLATE_TO` | `zh-cn`               | 推文翻译目标语言（BCP-47），留空则返回原文。可被单条链接的 `?lang=` 覆盖 |
 | `UA`           | iOS 微信内置浏览器 UA | `/html/` 路由抓取时的 User-Agent，用于绕过微信公众号白名单限制 |
 | `GITHUB_TOKEN` | （空）                | 可选，GitHub Personal Access Token（**权限留空即可**，详见上方说明）。以 Worker Secret 形式存储（`wrangler secret put`），不写入本文件。提升 `/github/` 路由的 API 限流配额（60次/h → 5000次/h） |
 
