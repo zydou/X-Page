@@ -3,7 +3,7 @@
  * ============================================================
  * X / Twitter 推文 → 自包含 HTML 的主路由。
  *
- * 路由形态：/<username>/status/<tweet_id>[?mode=<mode>][&lang=<lang>][&refresh]
+ * 路由形态：/<username>/status/<tweet_id>[?mode=<mode>][&lang=<lang>][&refresh][&refresh_button=0]
  *
  * 解析模式（?mode=，缺省 = all，非法值同样回退 all）：
  *   all    fxtwitter 返回的完整 thread（含本推的祖先推文）+ 每条的引用，历史默认行为
@@ -624,7 +624,7 @@ function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
  *
  * 数据获取（fetchTweetData）与渲染（renderHtml / renderMarkdown）分离，
  * 本函数只做三件事：
- *   - 解析 query 参数（mode / lang / refresh）与环境变量，拼出 cfg 与 refreshUrl
+ *   - 解析 query 参数（mode / lang / refresh / refresh_button）与环境变量，拼出 cfg 与 refreshUrl
  *   - 错误处理（API 超时 / JSON 解析失败）集中在此
  *   - 支持 Accept: text/markdown 协商，返回纯 Markdown（供 Agent / CLI 直接消费）
  *
@@ -641,8 +641,10 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
   const mode = parseMode(url.searchParams.get("mode"));
   // ?lang= 优先于 TRANSLATE_TO 环境变量；两者都缺省时不翻译
   const lang = parseLang(url.searchParams.get("lang")) || (env && env.TRANSLATE_TO) || "";
+  // ?refresh_button=0 隐藏页面上的"强制刷新"按钮（缺省仍显示）
+  const showRefreshBtn = url.searchParams.get("refresh_button") !== "0";
   // 刷新链接需带上 mode 与 lang，否则点刷新按钮会跳回默认参数
-  const refreshUrl = `/${cleanPath}?refresh=1`
+  const refreshUrl = !showRefreshBtn ? "" : `/${cleanPath}?refresh=1`
     + (mode === "all" ? "" : `&mode=${mode}`)
     + (lang ? `&lang=${lang}` : "");
   const cfg = {

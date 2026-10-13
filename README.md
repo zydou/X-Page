@@ -57,6 +57,16 @@ https://<your-worker-domain>/{username}/status/{tweet_id}?mode=quote&lang=ja
 - 非法取值一律按未指定处理（回退 `TRANSLATE_TO`），不会报错
 - 每种语言在 R2 里各存一份（`tweet/<id>.<lang>.json`），首次请求某个语言会回源一次
 
+#### 隐藏刷新按钮（`?refresh_button=0`）
+
+页面右上角默认带一个"强制刷新"按钮（绕过缓存回源）。加 `?refresh_button=0` 可将其隐藏：
+
+```txt
+https://<your-worker-domain>/{username}/status/{tweet_id}?refresh_button=0
+```
+
+- 仅影响按钮显示，缓存逻辑不受影响；需要刷新时仍可手动在 URL 上加 `?refresh=1`
+
 ### 🎬 视频代理
 
 ```txt
