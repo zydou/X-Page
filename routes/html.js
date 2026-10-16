@@ -328,11 +328,11 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
     ctx.waitUntil(bucket.put(mdKey, md, { httpMetadata: { contentType: "text/markdown" } }).catch(() => {}));
   }
 
-  const resp = markdownResponse(md, "miss");
-  // refresh 变体不进边缘缓存，否则第二次 ?refresh=1 会拿到边缘的陈旧副本、
-  // 转换压根没跑（实测：cf-cache-status: HIT）。与推文路由的 max-age=0 语义一致。
-  if (refresh) resp.headers.set("cache-control", "public, max-age=0");
-  return resp;
+  // ?refresh= 的语义到这里就够了：跳过 R2 读、强制重转、覆盖写回。
+  // 响应本身不需要特殊缓存头——markdownResponse 已是 no-store，边缘不存，
+  // 所以 refresh 修的就是「那个不带 query 的原始 URL」本身，下一次普通请求
+  // 直接读到新内容（旧设计里 refresh 只修 R2、边缘副本得等 TTL 过期）。
+  return markdownResponse(md, "miss");
 }
 
 /**

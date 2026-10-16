@@ -377,7 +377,7 @@ function renderPost(post, opt) {
  * @param {string} twitterCss twitter.css 源码字符串
  * @param {string} rawPath 原始路径（含 username/status/ 前缀），供缺 url 的推文做回退链接
  * @param {string} [refreshUrl] 刷新按钮的链接 URL
- * @returns {{html: string, empty: boolean}} HTML + body 是否为空
+ * @returns {string} 完整 HTML 文档
  */
 function renderHtml(data, cfg, mode, waterCss, twitterCss, rawPath, refreshUrl) {
   const { tz } = cfg;
@@ -412,8 +412,7 @@ function renderHtml(data, cfg, mode, waterCss, twitterCss, rawPath, refreshUrl) 
 
   // 清理空段落
   fullHtml = fullHtml.trim().replace(/<p><\/p>/g, "");
-  // empty 标记：body 无任何内容时禁止边缘缓存，避免瞬时异常渲染被缓存整整一年
-  return { html: wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss), empty: fullHtml.length === 0 };
+  return wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss);
 }
 
 /**
@@ -672,9 +671,11 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
       if (!md) {
         return new Response("Empty tweet", { status: 404 });
       }
+      // no-store：R2 是唯一真相源，边缘副本在本账号 purge 不掉，「省一次
+      // Worker 调用」换「写坏一次永久错」不划算（完整理由见 lib/to-markdown.js）
       const headers = {
         "content-type": "text/markdown; charset=utf-8",
-        "cache-control": refresh ? "public, max-age=0" : "public, max-age=31556952",
+        "cache-control": "no-store",
         "vary": "Accept",
         "x-markdown-tokens": String(estimateTokens(md)),
       };
@@ -683,12 +684,14 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
 
     // 默认 HTML 模式
     if (!data) return new Response("Invalid tweet URL", { status: 400 });
-    const { html, empty } = renderHtml(data, cfg, mode, waterCss, twitterCss, cleanPath, refreshUrl);
+    const html = renderHtml(data, cfg, mode, waterCss, twitterCss, cleanPath, refreshUrl);
 
-    // 空页面（body 无内容）不缓存：瞬时空响应一旦被边缘缓存会顶住整整一年
+    // no-store：R2 是唯一真相源，边缘副本在本账号 purge 不掉，「省一次 Worker
+    // 调用」换「写坏一次永久错」不划算（完整理由见 lib/to-markdown.js）。
+    // 原来只对空页面特判 no-store，现在所有情况都不进边缘缓存。
     const headers = {
       "content-type": "text/html; charset=utf-8",
-      "cache-control": empty ? "no-store" : refresh ? "public, max-age=0" : "public, max-age=31556952",
+      "cache-control": "no-store",
       "vary": "Accept",
     };
     if (fallback) {

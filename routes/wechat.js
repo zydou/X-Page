@@ -27,6 +27,8 @@
  *   - 命中规则：R2 有对象就直接返回，不做应用层过期判断
  *   - 无 refresh 入口：命中即缓存，内容以首次抓取为准（防失效优先）
  *   - 写回不阻塞响应（ctx.waitUntil 后台执行），失败静默忽略
+ *   - 边缘缓存 no-store：R2 已是永久真相源，边缘副本在本账号 purge 不掉，
+ *     「省一次 Worker 调用」换「写坏一次永久错」不划算（头注详）
  *
  * 注意：/html/ 路由不缓存，本缓存逻辑只对 /wechat/ 生效。
  * 生命周期：wechat/ 前缀未配置过期规则，默认永久保留（防失效优先）。
@@ -209,7 +211,7 @@ export async function serveWechat(request, env, ctx) {
           return new Response(html, {
             headers: {
               "content-type": "text/html; charset=utf-8",
-              "cache-control": "public, max-age=31556952",
+              "cache-control": "no-store",
               "access-control-allow-origin": "*",
               "vary": "Accept",
               "x-cache": "hit",
@@ -234,11 +236,13 @@ export async function serveWechat(request, env, ctx) {
     );
   }
 
-  // Vary: Accept —— 同一 URL 现在也有 text/markdown 变体，
-  // 边缘必须按 Accept 区分，否则缓存会串。
+  // 边缘 no-store：R2 已是永久真相源，边缘那份副本在本账号 purge 不掉
+  // （见 lib/to-markdown.js 的 markdownResponse 头注），留着不划算。
+  // Vary: Accept 仍带上——同一 URL 也有 text/markdown 变体，对忽略 no-store
+  // 的中间层按 Accept 区分仍是兜底。
   const headers = new Headers(resp.headers);
   headers.set("content-type", "text/html; charset=utf-8");
-  headers.set("cache-control", "public, max-age=31556952");
+  headers.set("cache-control", "no-store");
   headers.set("vary", "Accept");
   headers.set("x-cache", "miss");
   return new Response(html, { status: resp.status, headers });
