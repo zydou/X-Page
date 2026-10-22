@@ -790,13 +790,20 @@ async function fetchTweetData(rawPath, cfg, refresh, env, ctx) {
  * @returns {Promise<Object>} fxtwitter thread 数据
  */
 async function fetchAndCacheThread(apiUrl, r2Key, refresh, env) {
-  const resp = await fetch(apiUrl, {
-    headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
-    signal: AbortSignal.timeout(30000),
-    cf: refresh
-      ? { cacheTtl: 0, cacheEverything: true }
-      : { cacheTtl: 31556952, cacheEverything: true },
-  });
+  const attempt = () =>
+    fetch(apiUrl, {
+      headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
+      signal: AbortSignal.timeout(30000),
+      cf: refresh
+        ? { cacheTtl: 0, cacheEverything: true }
+        : { cacheTtl: 31556952, cacheEverything: true },
+    });
+  // 429 是突发限流，等一会儿通常就能过：1 / 2 / 4 秒退避，最多重试 3 次
+  let resp = await attempt();
+  for (let delay = 1000; resp.status === 429 && delay <= 4000; delay *= 2) {
+    await new Promise((r) => setTimeout(r, delay));
+    resp = await attempt();
+  }
   if (!resp.ok) throw new Error(`fxtwitter API ${resp.status}`);
   const data = await resp.json();
   if (env?.TWEETS && (data?.thread?.length ?? 0) > 0) {
