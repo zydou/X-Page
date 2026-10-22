@@ -314,7 +314,7 @@ function threadDescendants(pid, thread) {
  *
  * 本推、串推、引用推文共用同一套渲染逻辑。此前主循环与 quote 块是两段
  * 重复代码且字段访问不一致（quote 漏了 html_no_media），抽出后统一为
- * html_no_media ?? translation.text ?? text。
+ * html_no_media || translation.text || text。空串同样回退：译文尚未就绪时显示原文。
  *
  * article 的呈现按上下文区分（保留历史行为）：
  *   - 正文推文 → parseArticle 全量渲染
@@ -332,7 +332,7 @@ function renderPost(post, opt) {
   const author = post.author && post.author.name ? post.author.name : "Anonymous";
   const tweetUrl = post.url || fallbackUrl;
   const avatarUrl = proxyUrl(post.author && post.author.avatar_url ? post.author.avatar_url : "");
-  const text = (post.html_no_media ?? post.translation?.text ?? post.text ?? "").replace(/\n/g, "<br>");
+  const text = (post.html_no_media || post.translation?.text || post.text || "").replace(/\n/g, "<br>");
 
   let html = authorTag(author, tweetUrl, formatDate(post.created_timestamp, tz), avatarUrl, refreshUrl);
   html += `<p>${makeUrlClickable(text)}</p>`;
@@ -456,7 +456,7 @@ function renderPostMarkdown(post, opt) {
   const tweetUrl = post.url || opt.url || "";
   const avatarUrl = post.author && post.author.avatar_url ? post.author.avatar_url : "";
   // 取纯文本（优先 translation.text > text > html_no_media 去标签）
-  let text = post.translation?.text ?? post.text ?? post.html_no_media ?? "";
+  let text = post.translation?.text || post.text || post.html_no_media || "";
   text = text.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
 
   // YAML frontmatter：结构化元数据，便于 Agent 解析
