@@ -723,7 +723,7 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
  * @param {{lang: string}} cfg 翻译语言配置
  * @param {boolean} [refresh] 是否强制刷新（绕过 R2，强制调 API）
  * @param {Object} [env] Worker 环境（含 R2 绑定 TWEETS）
- * @param {Object} [ctx] Worker ExecutionContext（用于 waitUntil 后台回写）
+ * @param {Object} [ctx] Worker ExecutionContext（用于 waitUntil：客户端断开后回源仍会完成）
  * @returns {Promise<{data: Object|null, fallback: boolean}>} 推文数据；fallback = 是否回退到了 R2 旧数据
  */
 async function fetchTweetData(rawPath, cfg, refresh, env, ctx) {
@@ -755,47 +755,56 @@ async function fetchTweetData(rawPath, cfg, refresh, env, ctx) {
     }
   }
 
-  // 第二步：data 未拿到 → 拉 fxtwitter 并写回 R2
+  // 第二步：data 未拿到 → 回源 fxtwitter 并写回 R2
   if (!data) {
     let apiUrl = lang
       ? `https://api.fxtwitter.com/2/thread/${pid}?lang=${lang}`
       : `https://api.fxtwitter.com/2/thread/${pid}`;
     if (refresh) apiUrl += `${lang ? "&" : "?"}_t=${Date.now()}`;
-    let resp;
+
+    // 回源与写 R2 整体交给 waitUntil：客户端中途断开，后台仍会跑完，结果照常落盘
+    const upstream = fetchAndCacheThread(apiUrl, r2Key, refresh, env);
+    ctx?.waitUntil(upstream.catch(() => {}));
     try {
-      resp = await fetch(apiUrl, {
-        headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
-        signal: AbortSignal.timeout(3000),
-        cf: refresh
-          ? { cacheTtl: 0, cacheEverything: true }
-          : { cacheTtl: 31556952, cacheEverything: true },
-      });
+      data = await upstream;
     } catch (e) {
-      // 网络层失败（超时、DNS、TLS 等）：refresh 模式下回退到 R2
+      // 回源失败（超时、网络、HTTP 错误等）：refresh 模式下回退到 R2，否则抛出
       if (!fallbackFromR2) throw e;
       data = fallbackFromR2;
       fallback = true;
     }
-    if (!data) {
-      if (!resp.ok) {
-        // HTTP 4xx/5xx：refresh 模式下回退到 R2
-        if (!fallbackFromR2) throw new Error(`fxtwitter API ${resp.status}`);
-        data = fallbackFromR2;
-        fallback = true;
-      } else {
-        data = await resp.json();
-        // 异步写回 R2（不阻塞响应）；thread 为空说明是瞬时空响应，不写缓存以免污染一年
-        if (env?.TWEETS && ctx && (data?.thread?.length ?? 0) > 0) {
-          ctx.waitUntil(
-            env.TWEETS.put(r2Key, JSON.stringify(data), {
-              httpMetadata: { contentType: "application/json" },
-            }).catch(() => {
-              // R2 写失败不影响本次响应，下次请求会重新拉
-            })
-          );
-        }
-      }
-    }
   }
   return { data, fallback };
+}
+
+/**
+ * 回源 fxtwitter 拿 thread，成功后写回 R2。
+ *
+ * 超时 30 秒：线上日志里成功回源的耗时在 2–3 秒，3 秒上限会让首次访问频繁 502。
+ * thread 为空说明是瞬时空响应，不写 R2，以免污染一年的缓存。
+ *
+ * @param {string} apiUrl fxtwitter API 地址（已拼好 lang / 刷新参数）
+ * @param {string} r2Key 写回 R2 用的 key
+ * @param {boolean} refresh 是否强制刷新（决定 Cloudflare 边缘缓存策略）
+ * @param {Object} [env] Worker 环境（含 R2 绑定 TWEETS）
+ * @returns {Promise<Object>} fxtwitter thread 数据
+ */
+async function fetchAndCacheThread(apiUrl, r2Key, refresh, env) {
+  const resp = await fetch(apiUrl, {
+    headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
+    signal: AbortSignal.timeout(30000),
+    cf: refresh
+      ? { cacheTtl: 0, cacheEverything: true }
+      : { cacheTtl: 31556952, cacheEverything: true },
+  });
+  if (!resp.ok) throw new Error(`fxtwitter API ${resp.status}`);
+  const data = await resp.json();
+  if (env?.TWEETS && (data?.thread?.length ?? 0) > 0) {
+    await env.TWEETS.put(r2Key, JSON.stringify(data), {
+      httpMetadata: { contentType: "application/json" },
+    }).catch(() => {
+      // R2 写失败不影响本次响应，下次请求会重新拉
+    });
+  }
+  return data;
 }
