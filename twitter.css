@@ -66,6 +66,18 @@
     }
 }
 
+/*
+ * 只保留第一条推文的强制刷新按钮，其余推文隐藏。
+ *
+ * 每条推文的头部都是 body 的直接子元素（引用推文同层、主推文之间用 <hr>
+ * 分隔），无 .tweet 容器类。通用兄弟选择器 .tweet-header ~ .tweet-header
+ * 选中第二条及以后的所有头部——既覆盖第一条推文的引用推文，也覆盖
+ * thread/all 模式的后继推文，仅第一条推文的按钮保留显示。
+ */
+.tweet-header ~ .tweet-header .refresh-btn {
+    display: none;
+}
+
 /* 媒体容器：使用 Grid 实现最多两列布局 */
 .media-gallery {
     display: grid;
