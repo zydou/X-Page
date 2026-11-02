@@ -14,6 +14,7 @@
  * 路由优先级（从高到低）：
  *   /               使用说明页
  *   /favicon.ico    静默返回 204
+ *   /webhook        Telegram bot 更新入口（POST，校验 secret_token）
  *   /vid/  /vid/d/  视频代理 / 直连
  *   /img/  /img/d/  图片代理 / 直连
  *   /html/          HTML 抓取 + 改写代理（自定义 UA、防盗链）
@@ -49,6 +50,7 @@ import { serveHtml } from "./routes/html.js";
 import { serveWechat } from "./routes/wechat.js";
 import { serveGithub } from "./routes/github.js";
 import { serveTweet } from "./routes/tweet.js";
+import { handleWebhook } from "./routes/webhook.js";
 
 /**
  * Cloudflare Workers 运行时的主入口。
@@ -80,6 +82,11 @@ export default {
     // favicon 静默吞掉，避免噪音
     if (cleanPath === "favicon.ico") {
       return new Response(null, { status: 204 });
+    }
+
+    // Telegram bot webhook（POST /webhook，与其余服务共用本 hostname）
+    if (cleanPath === "webhook") {
+      return handleWebhook(request, env, ctx);
     }
 
     // 视频路由

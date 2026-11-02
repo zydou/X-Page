@@ -15,11 +15,16 @@ x-page/
 │   ├── image.js             # /img/<url> and /img/d/<url> → image viewer HTML
 │   ├── html.js              # /html/<url> → HTML fetch + rewrite
 │   ├── wechat.js            # /wechat/<url> → WeChat article HTML
-│   └── tweet.js             # /<user>/status/<id>[?mode=][&lang=] → tweet HTML
+│   ├── tweet.js             # /<user>/status/<id>[?mode=][&lang=] → tweet HTML
+│   └── webhook.js           # POST /webhook → Telegram bot（X-Page 链接转换）
 ├── lib/
 │   ├── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
 │   ├── markdown.js          # markdown → HTML (markdown-it + highlight.js), used by /github/
-│   └── to-markdown.js       # HTML → markdown (Workers AI toMarkdown), used by /html/ + /wechat/
+│   ├── to-markdown.js       # HTML → markdown (Workers AI toMarkdown), used by /html/ + /wechat/
+│   └── bot/                 # Telegram bot helpers（仅 webhook 路由使用）
+│       ├── matcher.js       # 纯函数：链接识别 + X-Page 链接生成
+│       ├── telegram.js      # Telegram Bot API 客户端
+│       └── media.js         # 媒体下载 → 图床上传
 ├── wrangler.toml            # service config, env vars, observability, Text module rules
 ├── water.css                # base styles for tweet HTML (CI-fetched, Text-module inlined)
 ├── twitter.css              # tweet-specific overrides (Text-module inlined)
@@ -41,6 +46,7 @@ x-page/
 | `/wechat/<raw-url>`              | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
 | `/proxy/<raw-url>`               | Generic passthrough proxy; rewrites JS/CSS relative URLs |
 | `/github/<user>/<repo>[/<path>]` | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
+| `/webhook`                       | Telegram bot webhook（POST，校验 `X-Telegram-Bot-Api-Secret-Token`；其余请求 403） |
 | `/`                              | Unified usage page (zh/en) |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
@@ -141,6 +147,10 @@ Bindings: `env.TWEETS` → R2 bucket `x-page` / `x-page-dev` (keys `tweet/`, `we
 deterministic and model-free, so it consumes 0 Neurons and never touches the free plan's
 10,000 Neurons/day pool (verified on this free account, 2026-10). Note the markdown conversion
 feature carries a **Beta** badge in the Cloudflare docs nav — Workers AI itself is GA.
+
+Telegram bot secrets (`BOT_TOKEN`, `WEBHOOK_SECRET`, `IMGUR_CLIENTID`, `IMGBB_API_KEY`,
+`X_PAGE_BASE`, `ALLOWED_CHATS`) are set via `wrangler secret put` and read by the `/webhook`
+route (`routes/webhook.js`). See `README.md` → Telegram 转换 Bot.
 
 
 ### Local Development

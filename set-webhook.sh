@@ -6,12 +6,12 @@
 #   ./set-webhook.sh <BOT_TOKEN> <WEBHOOK_URL> <SECRET_TOKEN>
 #
 # 示例：
-#   ./set-webhook.sh 123456:ABC-DEF https://x-page-bot.<sub>.workers.dev/webhook mys3cret
+#   ./set-webhook.sh 123456:ABC-DEF https://<your-worker-domain>/webhook mys3cret
 #
 # 其中：
-#   - WEBHOOK_URL  是 bot Worker 的 /webhook 公开地址
+#   - WEBHOOK_URL  是 X-Page Worker 的 /webhook 公开地址（与站点共用域名）
 #   - SECRET_TOKEN 会写入 X-Telegram-Bot-Api-Secret-Token 头，
-#                  bot Worker 端以 WEBHOOK_SECRET 校验（两处必须一致）
+#                  Worker 端以 WEBHOOK_SECRET 校验（两处必须一致）
 # ============================================================
 set -e
 

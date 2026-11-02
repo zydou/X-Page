@@ -1,24 +1,24 @@
 /**
- * bot/worker.js
+ * routes/webhook.js
  * ============================================================
- * X-Page 转换 Telegram Bot（Cloudflare Worker 入口）。
+ * Telegram Bot webhook 路由：POST /webhook
  *
- * 路由：
- *   POST /webhook   Telegram webhook（校验 secret_token，处理更新）
- *   GET  /           健康检查 / 用法说明
+ * Telegram 把每条更新 POST 到 setWebhook 指定的 URL；若设置了
+ * secret_token，则在请求头 X-Telegram-Bot-Api-Secret-Token 携带。
+ * 本路由校验该头，不一致返回 403（fail-closed）。
  *
  * 设计要点：
  *   - webhook 立即返回 200，实际处理放进 ctx.waitUntil，
  *     避免 Telegram 因响应慢而重复投递（重复投递会让 bot 反复回复）。
  *   - 链接转换是纯字符串拼接（零网络），媒体下载 + 图床上传是唯一的网络重活。
- *   - 白名单（ALLOWED_CHATS）配置 `chat` 或 `chat:thread` 组合，
+ *   - 白名单（ALLOWED_CHATS）配置 chat 或 chat:thread 组合，
  *     支持指定群话题 + 指定用户私聊。
  * ============================================================
  */
 
-import { buildReply } from "./matcher.js";
-import { sendMessage, sendChatAction } from "./telegram.js";
-import { mediaTypeOf, handleMedia } from "./media.js";
+import { buildReply } from "../lib/bot/matcher.js";
+import { sendMessage, sendChatAction } from "../lib/bot/telegram.js";
+import { mediaTypeOf, handleMedia } from "../lib/bot/media.js";
 
 const HELP = `X-Page 转换机器人
 ──────────────
@@ -29,40 +29,27 @@ const HELP = `X-Page 转换机器人
 • 图片 / 视频 → X-Page 预览
 • 任意 URL → 代理 / 直链 / 网页`;
 
-export default {
-  /**
-   * Worker 主入口。
-   *
-   * @param {Request} request 入站请求
-   * @param {object} env 绑定环境（vars + secrets）
-   * @param {object} ctx ExecutionContext
-   * @returns {Response}
-   */
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    // Telegram webhook
-    if (url.pathname === "/webhook") {
-      if (request.method !== "POST") {
-        return new Response("method not allowed", { status: 405 });
-      }
-      // 校验 webhook secret（setWebhook 时配置的 secret_token）
-      const got = request.headers.get("x-telegram-bot-api-secret-token");
-      if (!env.WEBHOOK_SECRET || got !== env.WEBHOOK_SECRET) {
-        return new Response("forbidden", { status: 403 });
-      }
-      const update = await request.json();
-      ctx.waitUntil(handleUpdate(update, env));
-      return new Response("ok");
-    }
-
-    // 健康检查 / 用法
-    return new Response(HELP, {
-      status: 200,
-      headers: { "content-type": "text/plain; charset=utf-8" },
-    });
-  },
-};
+/**
+ * 处理 POST /webhook（Telegram bot 入口）。
+ *
+ * @param {Request} request 入站请求
+ * @param {object} env 绑定环境（vars + secrets）
+ * @param {object} ctx ExecutionContext
+ * @returns {Response}
+ */
+export async function handleWebhook(request, env, ctx) {
+  if (request.method !== "POST") {
+    return new Response("method not allowed", { status: 405 });
+  }
+  // 校验 webhook secret（setWebhook 时配置的 secret_token）
+  const got = request.headers.get("x-telegram-bot-api-secret-token");
+  if (!env.WEBHOOK_SECRET || got !== env.WEBHOOK_SECRET) {
+    return new Response("forbidden", { status: 403 });
+  }
+  const update = await request.json();
+  ctx.waitUntil(handleUpdate(update, env));
+  return new Response("ok");
+}
 
 /**
  * 处理一条 webhook update。

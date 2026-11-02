@@ -164,6 +164,45 @@ npx wrangler secret put GITHUB_TOKEN
 
 > 不要直接把 token 明文写进 `wrangler.toml` 的 `[vars]`——那会随代码入库。Secret 加密存于 Cloudflare，运行时仍通过 `env.GITHUB_TOKEN` 读取。
 
+### 🤖 Telegram 转换 Bot（`/webhook`）
+
+同一个 Worker 上还跑着一个 Telegram bot：把 X / GitHub / 微信公众号链接以及图片 / 视频转成 X-Page 链接，供群话题 / 私聊直接使用。
+
+```txt
+POST https://<your-worker-domain>/webhook     # Telegram webhook 更新入口
+```
+
+Telegram 把每条更新 POST 到 `setWebhook` 指定的 URL；设置 `secret_token` 后请求头携带 `X-Telegram-Bot-Api-Secret-Token`，Worker 校验不一致返回 403。无需 VPS、无需独立域名。
+
+#### 所需 Secret（`wrangler secret put`）
+
+| Secret | 说明 |
+| ------ | ---- |
+| `BOT_TOKEN` | BotFather 创建 bot 得到的 token |
+| `WEBHOOK_SECRET` | 自生成（如 `openssl rand -hex 16`），与 `setWebhook` 的 `secret_token` 一致 |
+| `IMGUR_CLIENTID` | Imgur Client-ID（图片优先 / 视频） |
+| `IMGBB_API_KEY` | ImgBB API Key（图片兜底） |
+| `X_PAGE_BASE` | X-Page 服务根地址（如 `https://<your-worker-domain>`） |
+| `ALLOWED_CHATS` | 白名单，逗号分隔，每项 `<chatId>` 或 `<chatId>:<threadId>`；留空则响应所有来源（不推荐） |
+
+#### 设置 webhook
+
+```bash
+./set-webhook.sh <BOT_TOKEN> "https://<your-worker-domain>/webhook" <WEBHOOK_SECRET>
+```
+
+#### 支持的转换
+
+| 输入 | 输出 |
+| ---- | ---- |
+| `x.com/<user>/status/<id>` | 完整 / 本推 / 本推+引用 / 串推（4 种 `?mode=`） |
+| `github.com/<user>/<repo>/blob/main/<file>` | `/github/...` README / 文件渲染 |
+| `mp.weixin.qq.com/s...` | `/wechat/<url>` 文章代理 |
+| 图片 / 视频消息 | 下载 → 图床（Imgur 优先、ImgBB 兜底）→ `/img/`、`/vid/` |
+| 任意 http(s) URL | `/vid/`、`/img/`、`/html/` |
+
+全部回复为纯文本模式（Telegram 自动把裸 URL 变可点击）。媒体不落 R2，容量交给图床；Telegram Bot API 单文件下载上限 20MB。
+
 ### ⚠️ 注意事项
 
 > 提示：URL 里有 `?`、`#`、空格、中文等

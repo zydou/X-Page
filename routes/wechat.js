@@ -70,7 +70,7 @@
  *   }
  *
  * 当 iframe 被嵌入我们的 worker 页面时，iframe 内的 document.referrer = 我们的域名
- * （x.bennydou.workers.dev），不匹配 qq.com/woa.com/oa.com → 播放器 JS 不加载 → 空壳。
+ * （如 <your-worker-domain>），不匹配 qq.com/woa.com/oa.com → 播放器 JS 不加载 → 空壳。
  *
  * 这个 referrer 是浏览器自动设置的，worker 无法伪造或修改。
  *
