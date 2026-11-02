@@ -1,0 +1,25 @@
+# bot/wrangler.toml —— X-Page 转换 Telegram Bot 的部署配置
+#
+# 部署前一次性准备：
+#   1. 写入 Secret：          npx wrangler secret put BOT_TOKEN
+#                             npx wrangler secret put WEBHOOK_SECRET
+#                             npx wrangler secret put IMGUR_CLIENTID
+#                             npx wrangler secret put IMGBB_API_KEY
+#                             npx wrangler secret put X_PAGE_BASE
+#                             npx wrangler secret put ALLOWED_CHATS
+#   2. 部署：                 npx wrangler deploy
+#   3. 设置 webhook：         ./set-webhook.sh <token> <webhook-url> <secret>
+# 详见 README.md。
+#
+# 说明：所有敏感配置（Bot token、图床 key、X-Page 域名、白名单）一律以
+# Worker Secret 形式存储，本配置不硬编码任何值，避免入库后泄漏。
+# 本地副本保存在项目根 .env（已被 .gitignore 忽略）。
+
+name = "x-page-bot"
+compatibility_date = "2026-07-01"
+main = "worker.js"
+preview_urls = false
+
+# 无 [vars] —— X_PAGE_BASE / ALLOWED_CHATS 均为 Secret：
+#   X_PAGE_BASE    X-Page 服务根地址（以 `wrangler secret put X_PAGE_BASE` 设置）
+#   ALLOWED_CHATS  白名单（逗号分隔，每项 `<chatId>` 或 `<chatId>:<threadId>`）
