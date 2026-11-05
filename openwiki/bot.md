@@ -5,7 +5,7 @@ description: 介绍 Telegram 转换机器人的 webhook 安全模型与链接转
 tags: [Telegram, Bot, webhook, 链接转换]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-05T11:10:10.273Z
+    at: 2026-11-05T16:28:31.398Z
 sources:
   - id: openwiki-source-3dec53bd176af78782129d6d
     resource: repo://lib/bot/matcher.js
@@ -15,7 +15,7 @@ sources:
     resource: repo://lib/bot/telegram.js
   - id: openwiki-source-7ac255018a231eb231733c3f
     resource: repo://routes/webhook.js
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-05T16:28:31.398Z" }
 ---
 
 # Telegram 机器人
@@ -91,13 +91,22 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 发送前会先 `sendChatAction()` 打 `typing` / `upload_photo` / `upload_video` 动作，让长任务有即时反馈（`routes/webhook.js:80,88-89,95`）。
 
-## 7 错误处理与白名单之外的容错
+## 7 预热：回复后请求一次真实页面写 R2
+
+`sendMessage()` 之后，文本通道会按 `buildPrewarmUrls(text, xPageBase)` 算出的 URL 列表逐个 GET 一次对应页面（`prewarmCache`，`routes/webhook.js`），触发真实路由回源并写 R2，让用户点开链接时直接命中缓存。
+
+- 只覆盖会写 R2 的两条路由：X/Twitter → 不带 `?mode=`/`?lang=` 的推文页（R2 key 只跟 lang 维度有关，与 mode 无关，一次足够）；微信公众号 → `/wechat/<url>`（即 HTML 写 R2 的 key）。
+- GitHub、通用媒体 URL 等不落 R2 的平台不做预热，`buildPrewarmUrls` 返回空数组。
+- 每条请求带 `AbortSignal.timeout(60000)` 防长尾挂起，并 `await res.arrayBuffer()` 消费 body（推文在 handler 内部 `waitUntil` 后台写 R2，不读完可能不落盘）。
+- 失败/超时/非 2xx 只记 `console.error("prewarm 失败:", ...)`，绝不重试也不通知用户；回复已在预热前发完，预热失败完全无感。
+
+## 8 错误处理与白名单之外的容错
 
 `handleUpdate()` 的整个处理体包在 try/catch 里（`routes/webhook.js:64-107`）：异常时打 `console.error` 记录、并尽力 `sendMessage` 一条 `⚠️ 处理失败：<msg>` 给用户，通知失败也不再向上传播——因为这是 `ctx.waitUntil` 后台任务，静默失败用户只会看到 bot 没动静。
 
 命令 `/start` / `/help` 走 `HELP` 静态文本，一次性回出支持的转换列表（`routes/webhook.js:23-30,79-83`），不打任何网络。
 
-## 8 Secrets 清单
+## 9 Secrets 清单
 
 | Secret | 用途 |
 |---|---|
@@ -110,7 +119,7 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 这些 secret 由 `wrangler secret put` 设置，每次部署的 Worker 运行时读取，**不能**烧进 bundle。
 
-## 9 关联
+## 10 关联
 
 - 所有请求如何排队进 `/webhook` → [路由与请求处理](routing.md)
 - GitHub 链接转换后渲染什么样的 HTML → [媒体代理与 GitHub 渲染](media-github.md)

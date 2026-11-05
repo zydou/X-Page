@@ -16,7 +16,7 @@
  * ============================================================
  */
 
-import { buildReply } from "../lib/bot/matcher.js";
+import { buildReply, buildPrewarmUrls } from "../lib/bot/matcher.js";
 import { sendMessage, sendChatAction } from "../lib/bot/telegram.js";
 import { mediaTypeOf, handleMedia } from "../lib/bot/media.js";
 
@@ -37,6 +37,34 @@ const HELP = `X-Page 转换机器人
  * @param {object} ctx ExecutionContext
  * @returns {Response}
  */
+/**
+ * webhook 内部对自家域名做 GET 预热：触发真实路由回源并写 R2，
+ * 让用户点开转换链接时直接命中缓存，无需首次等待。
+ *
+ * 逐个请求、忽略失败（timeout / 非 2xx / 读 body 出错）：缓存只是优化，
+ * 预热失败下次真实请求仍会正常回源，绝不影响已发送的回复。
+ * 仅供推文 / 微信两条写 R2 的路由使用（见 matcher.js buildPrewarmUrls）。
+ *
+ * @param {string[]} urls buildPrewarmUrls 算出的页面地址
+ */
+async function prewarmCache(urls) {
+  for (const u of urls) {
+    try {
+      const res = await fetch(u, {
+        headers: { "user-agent": "telegram-bot/prewarm" },
+        signal: AbortSignal.timeout(60000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // 必须消费 body：tweet / wechat 这两条路由在 fetchAndCacheThread /
+      // waitUntil 后台写 R2，body 不读完 Worker 可能提前结束无法落盘。
+      await res.arrayBuffer();
+    } catch (err) {
+      // 预热失败只记日志，不重试、不通知用户
+      console.error("prewarm 失败:", u, err?.message || err);
+    }
+  }
+}
+
 export async function handleWebhook(request, env, ctx) {
   if (request.method !== "POST") {
     return new Response("method not allowed", { status: 405 });
@@ -95,6 +123,12 @@ async function handleUpdate(update, env) {
     await sendChatAction(env, msg.chat.id, "typing", msg.message_thread_id);
     const reply = buildReply(text, xPageBase);
     if (reply) await sendMessage(env, msg, reply);
+
+    // 回复已发送后，后台预热真实页面 → 写 R2（见 prewarmCache）。
+    // 不在 ctx.waitUntil 里：handleUpdate 本身已跑在 webhook 的 waitUntil 中，
+    // 使它完成后再请求一次自家域名是安全的；单进程内串行等就是全部代价。
+    const urls = reply ? buildPrewarmUrls(text, xPageBase) : [];
+    if (urls.length) await prewarmCache(urls);
   } catch (err) {
     // 记录错误并尽力告知用户，但不让 waitUntil 静默吞掉
     console.error("handleUpdate error:", err?.message || err);
