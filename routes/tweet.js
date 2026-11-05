@@ -284,6 +284,22 @@ function parseLang(raw) {
 }
 
 /**
+ * 去掉正文中指向自身 Article 的链接。
+ *
+ * Article 推文的 text 往往只有一行 https://x.com/i/article/<id>：文章内容由
+ * parseArticle 另行渲染，这行链接对读者没有信息量，去掉。
+ * 只删除与 article.id 精确匹配的链接，正文里其他文字原样保留。
+ *
+ * @param {string} text 正文（纯文本或已选定的译文）
+ * @param {Object|null} article post.article
+ * @returns {string} 去掉链接并 trim 后的正文
+ */
+function stripArticleLink(text, article) {
+  if (!article?.id) return text;
+  return text.split(`https://x.com/i/article/${article.id}`).join("").trim();
+}
+
+/**
  * 渲染单条推文为 HTML 片段：头部 + 正文 + 长文 + 媒体画廊 + 可选引用。
  *
  * 本推、串推、引用推文共用同一套渲染逻辑。此前主循环与 quote 块是两段
@@ -306,7 +322,10 @@ function renderPost(post, opt) {
   const author = post.author && post.author.name ? post.author.name : "Anonymous";
   const tweetUrl = post.url || fallbackUrl;
   const avatarUrl = proxyUrl(post.author && post.author.avatar_url ? post.author.avatar_url : "");
-  const text = (post.html_no_media || post.translation?.text || post.text || "").replace(/\n/g, "<br>");
+  const text = stripArticleLink(
+    post.html_no_media || post.translation?.text || post.text || "",
+    post.article
+  ).replace(/\n/g, "<br>");
 
   let html = authorTag(author, tweetUrl, formatDate(post.created_timestamp, tz), avatarUrl, refreshUrl);
   html += `<p>${makeUrlClickable(text)}</p>`;
@@ -431,7 +450,7 @@ function renderPostMarkdown(post, opt) {
   const avatarUrl = post.author && post.author.avatar_url ? post.author.avatar_url : "";
   // 取纯文本（优先 translation.text > text > html_no_media 去标签）
   let text = post.translation?.text || post.text || post.html_no_media || "";
-  text = text.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
+  text = stripArticleLink(text.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, ""), post.article);
 
   // YAML frontmatter：结构化元数据，便于 Agent 解析
   const dateStr = formatDate(post.created_timestamp, tz);
@@ -440,7 +459,7 @@ function renderPostMarkdown(post, opt) {
   let md = `---\nauthor: "${fmAuthor}"\nauthor_url: "${fmTweetUrl}"\ndate: "${dateStr}"\ntweet_url: "${fmTweetUrl}"`;
   if (isQuote) md += `\ntweet_type: "quote"`;
   md += `\n---\n\n`;
-  md += text + "\n";
+  md += text ? text + "\n" : "";
 
   if (post.article) {
     if (articlePreview) {
