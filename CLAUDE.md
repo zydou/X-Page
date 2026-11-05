@@ -21,6 +21,7 @@ x-page/
 │   ├── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
 │   ├── markdown.js          # markdown → HTML (markdown-it + highlight.js), used by /github/
 │   ├── to-markdown.js       # HTML → markdown (Workers AI toMarkdown), used by /html/ + /wechat/
+│   ├── thread.js            # tweet 自推链补全 + 墓碑判定 + 后代筛选（纯函数，会话数据经 io 注入）
 │   └── bot/                 # Telegram bot helpers（仅 webhook 路由使用）
 │       ├── matcher.js       # 纯函数：链接识别 + X-Page 链接生成
 │       ├── telegram.js      # Telegram Bot API 客户端

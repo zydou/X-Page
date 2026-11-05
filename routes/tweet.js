@@ -22,7 +22,7 @@
  *   1. parseMode() / parseLang()  从 query 提取解析模式与翻译语言
  *   2. extractPid()               从路径提取推文 ID
  *   3. fetchTweetData()           取 thread 数据（R2 命中 → 回源 fxtwitter 并写回 R2）
- *   4. threadDescendants()        从 thread 中筛出本推的串推后代（剔除祖先）
+ *   4. descendantsOf()            从 thread 中取本推的串推后代（lib/thread.js）
  *   5. renderPost()               单条推文 → HTML（头部 + 正文 + article + 媒体 + 引用）
  *   6. wrapHtml()                 用 water.css + twitter.css 包裹生成最终页
  *
@@ -44,6 +44,7 @@ import {
   buildMediaTag,
   proxyUrl,
 } from "../lib/utils.js";
+import { isTombstone, repairSelfThread, descendantsOf } from "../lib/thread.js";
 
 /**
  * 推文字号解析：内联样式的 <b>/<i> 渲染。
@@ -283,33 +284,6 @@ function parseLang(raw) {
 }
 
 /**
- * 从 fxtwitter 的 data.thread 中筛出"本推的串推后代"。
- *
- * thread[] 不只包含后代，还可能包含本推的祖先推文（实测：请求回复推文时
- * thread 里同样带父推文）。祖先集通过从本推沿 replying_to.status 向上游走
- * 得到，遍历限定在 thread[] 的 id 集合内，循环上限 thread.length 次防环。
- *
- * @param {string} pid 请求的推文 ID
- * @param {Array} thread fxtwitter 返回的 data.thread
- * @returns {Array} 按 created_timestamp 升序排列的后代推文
- */
-function threadDescendants(pid, thread) {
-  thread = thread || [];
-  const ids = new Set(thread.map((p) => p && p.id));
-  const ancestors = new Set();
-  let cur = thread.find((p) => p && p.id === pid);
-  for (let i = 0; i < thread.length && cur; i++) {
-    const parent = cur.replying_to && cur.replying_to.status;
-    if (!parent || !ids.has(parent)) break;
-    ancestors.add(parent);
-    cur = thread.find((p) => p && p.id === parent);
-  }
-  return thread
-    .filter((p) => p && p.id && p.id !== pid && !ancestors.has(p.id))
-    .sort((a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0));
-}
-
-/**
  * 渲染单条推文为 HTML 片段：头部 + 正文 + 长文 + 媒体画廊 + 可选引用。
  *
  * 本推、串推、引用推文共用同一套渲染逻辑。此前主循环与 quote 块是两段
@@ -327,7 +301,7 @@ function threadDescendants(pid, thread) {
  * @returns {string} 可直接嵌入推文卡片的 HTML 片段
  */
 function renderPost(post, opt) {
-  if (!post) return "";
+  if (!post || isTombstone(post)) return "";
   const { url: fallbackUrl, tz, refreshUrl, withQuote = false, articlePreview = false } = opt;
   const author = post.author && post.author.name ? post.author.name : "Anonymous";
   const tweetUrl = post.url || fallbackUrl;
@@ -364,7 +338,7 @@ function renderPost(post, opt) {
  *   1. all 模式：完整 thread 按 created_timestamp 升序渲染（thread 不一定有序），
  *      每条推文都展开引用——与旧实现逐字节一致，含本推的祖先推文
  *   2. 其他模式以本推为起点：self 只渲染本推；quote 追加本推引用；
- *      thread 追加 threadDescendants() 筛出的串推后代（剔除祖先推文）
+ *      thread 追加 descendantsOf() 取出的串推后代
  *   3. wrapHtml 拼接 <head> + <style>
  *
  * 注意：status.author.name 作为 og:site_name 写进 <head>，
@@ -385,13 +359,13 @@ function renderHtml(data, cfg, mode, waterCss, twitterCss, rawPath, refreshUrl) 
 
   const thisAuthor = data?.status?.author?.name ?? "Anonymous";
   const base = { url: rawPath, tz, refreshUrl };
-  const thread = data?.thread ?? [];
+  const thread = (data?.thread ?? []).filter((p) => !isTombstone(p));
   const byTs = (a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0);
 
   let fullHtml;
   if (mode === "all") {
     // 历史默认行为：渲染 fxtwitter 返回的完整 thread（含本推的祖先推文），
-    // 按时间升序，且每条推文的引用都展开。这里刻意不复用 threadDescendants，
+    // 按时间升序，且每条推文的引用都展开。这里刻意不复用 descendantsOf，
     // 以保证 ?mode=all 与不带参数的输出与旧实现逐字节一致。
     const ids = new Set(thread.filter((p) => p && p.id).map((p) => p.id));
     const list = (ids.has(pid) ? thread : [data?.status, ...thread]).filter((p) => p && p.id);
@@ -404,7 +378,7 @@ function renderHtml(data, cfg, mode, waterCss, twitterCss, rawPath, refreshUrl) 
     fullHtml = renderPost(data?.status, { ...base, withQuote: mode === "quote" });
     // thread 模式追加串推后代（剔除本推的祖先推文）
     if (mode === "thread") {
-      for (const post of threadDescendants(pid, thread)) {
+      for (const post of descendantsOf(pid, data?.thread ?? [])) {
         fullHtml += `<hr>` + renderPost(post, { ...base });
       }
     }
@@ -450,7 +424,7 @@ export function wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss) {
  * 复用 renderPost 的数据提取逻辑，仅改输出格式。
  */
 function renderPostMarkdown(post, opt) {
-  if (!post) return "";
+  if (!post || isTombstone(post)) return "";
   const { tz, refreshUrl, withQuote = false, articlePreview = false, isQuote = false } = opt;
   const author = post.author && post.author.name ? post.author.name : "Anonymous";
   const tweetUrl = post.url || opt.url || "";
@@ -595,7 +569,7 @@ function parseAtomicMarkdown(entities, article) {
  */
 function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
   const { tz } = cfg;
-  const thread = data?.thread ?? [];
+  const thread = (data?.thread ?? []).filter((p) => !isTombstone(p));
   const byTs = (a, b) => (a.created_timestamp || 0) - (b.created_timestamp || 0);
   const base = { tz, refreshUrl };
 
@@ -610,7 +584,7 @@ function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
   } else {
     md = renderPostMarkdown(data?.status, { ...base, withQuote: mode === "quote" });
     if (mode === "thread") {
-      for (const post of threadDescendants(pid, thread)) {
+      for (const post of descendantsOf(pid, data?.thread ?? [])) {
         md += "\n" + renderPostMarkdown(post, base);
       }
     }
@@ -763,7 +737,7 @@ async function fetchTweetData(rawPath, cfg, refresh, env, ctx) {
     if (refresh) apiUrl += `${lang ? "&" : "?"}_t=${Date.now()}`;
 
     // 回源与写 R2 整体交给 waitUntil：客户端中途断开，后台仍会跑完，结果照常落盘
-    const upstream = fetchAndCacheThread(apiUrl, r2Key, refresh, env);
+    const upstream = fetchAndCacheThread(apiUrl, r2Key, refresh, env, lang);
     ctx?.waitUntil(upstream.catch(() => {}));
     try {
       data = await upstream;
@@ -778,35 +752,96 @@ async function fetchTweetData(rawPath, cfg, refresh, env, ctx) {
 }
 
 /**
- * 回源 fxtwitter 拿 thread，成功后写回 R2。
+ * fxtwitter v2 GET：429 指数退避（1 / 2 / 4 秒，最多重试 3 次）。
  *
- * 超时 30 秒：线上日志里成功回源的耗时在 2–3 秒，3 秒上限会让首次访问频繁 502。
- * thread 为空说明是瞬时空响应，不写 R2，以免污染一年的缓存。
- *
- * @param {string} apiUrl fxtwitter API 地址（已拼好 lang / 刷新参数）
- * @param {string} r2Key 写回 R2 用的 key
+ * @param {string} url 完整 API 地址
  * @param {boolean} refresh 是否强制刷新（决定 Cloudflare 边缘缓存策略）
- * @param {Object} [env] Worker 环境（含 R2 绑定 TWEETS）
- * @returns {Promise<Object>} fxtwitter thread 数据
+ * @returns {Promise<Object>} 解析后的 JSON
  */
-async function fetchAndCacheThread(apiUrl, r2Key, refresh, env) {
+async function fxGet(url, refresh) {
   const attempt = () =>
-    fetch(apiUrl, {
+    fetch(url, {
       headers: { Accept: "application/json", "User-Agent": "TelegramBot (like TwitterBot)" },
       signal: AbortSignal.timeout(30000),
       cf: refresh
         ? { cacheTtl: 0, cacheEverything: true }
         : { cacheTtl: 31556952, cacheEverything: true },
     });
-  // 429 是突发限流，等一会儿通常就能过：1 / 2 / 4 秒退避，最多重试 3 次
+  // 429 是突发限流，等一会儿通常就能过
   let resp = await attempt();
   for (let delay = 1000; resp.status === 429 && delay <= 4000; delay *= 2) {
     await new Promise((r) => setTimeout(r, delay));
     resp = await attempt();
   }
   if (!resp.ok) throw new Error(`fxtwitter API ${resp.status}`);
-  const data = await resp.json();
-  if (env?.TWEETS && (data?.thread?.length ?? 0) > 0) {
+  return resp.json();
+}
+
+/** 自推链补全最多翻几页会话回复（同作者续推通常排在前面，本页无同作者即停） */
+const REPLY_MAX_PAGES = 3;
+
+/**
+ * 补全用的 /2/conversation 数据源（实现 lib/thread.js 的 io 接口）。
+ * 带上 lang，保证补回的节点与主 thread 一样有译文。
+ *
+ * @param {string} lang 翻译语言（可空）
+ * @param {boolean} refresh 是否强制刷新
+ * @returns {{fetchReplies: Function, fetchChain: Function}}
+ */
+function conversationIo(lang, refresh) {
+  const conv = (id, cursor) => {
+    const qs = new URLSearchParams();
+    if (lang) qs.set("lang", lang);
+    if (cursor) qs.set("cursor", cursor);
+    const q = qs.toString();
+    return fxGet(`https://api.fxtwitter.com/2/conversation/${id}${q ? `?${q}` : ""}`, refresh);
+  };
+  return {
+    async fetchReplies(rootId, author) {
+      const all = [];
+      let cursor;
+      for (let page = 0; page < REPLY_MAX_PAGES; page++) {
+        const d = await conv(rootId, cursor);
+        const replies = d.replies ?? [];
+        all.push(...replies);
+        cursor = d.cursor?.bottom;
+        if (!cursor || !replies.some((r) => r?.author?.screen_name === author)) break;
+      }
+      return all;
+    },
+    async fetchChain(id) {
+      const d = await conv(id);
+      return d.thread ?? [];
+    },
+  };
+}
+
+/**
+ * 回源 fxtwitter 拿 thread；自推链补全后写回 R2。
+ *
+ * 超时 30 秒：线上日志里成功回源的耗时在 2–3 秒，3 秒上限会让首次访问频繁 502。
+ * thread 为空说明是瞬时空响应，不写 R2，以免污染一年的缓存。
+ * 自推链补全失败（上游波动）时仍返回已拿到的数据，但不写 R2：
+ * 否则会把残缺的串推缓存一年，下次访问才有机会补全。
+ *
+ * @param {string} apiUrl fxtwitter API 地址（已拼好 lang / 刷新参数）
+ * @param {string} r2Key 写回 R2 用的 key
+ * @param {boolean} refresh 是否强制刷新（决定 Cloudflare 边缘缓存策略）
+ * @param {Object} [env] Worker 环境（含 R2 绑定 TWEETS）
+ * @param {string} [lang] 翻译语言（补全时的会话请求同样带上）
+ * @returns {Promise<Object>} fxtwitter thread 数据（自推链已补全）
+ */
+async function fetchAndCacheThread(apiUrl, r2Key, refresh, env, lang) {
+  const data = await fxGet(apiUrl, refresh);
+  let complete = true;
+  if (Array.isArray(data.thread)) {
+    try {
+      data.thread = await repairSelfThread(data.thread, conversationIo(lang, refresh));
+    } catch {
+      complete = false;
+    }
+  }
+  if (complete && env?.TWEETS && (data?.thread?.length ?? 0) > 0) {
     await env.TWEETS.put(r2Key, JSON.stringify(data), {
       httpMetadata: { contentType: "application/json" },
     }).catch(() => {
