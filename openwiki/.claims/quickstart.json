@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:041a2d5fbfa0ca9bb2e406202b5b25598c0e458a0407794d3f41053af60a4e50",
+  "claims": [
+    {
+      "id": "claim_d80fdd7959ea4571a966a79ad0050944",
+      "statement": "x-page 由 worker.js 单入口分发九条子服务，推文路由为兜底。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+        }
+      ]
+    },
+    {
+      "id": "claim_b70364ef83d247a2b1d325b1aa71bb55",
+      "statement": "两阶段部署：先 wrangler.dev.toml 的 x-dev 验证，再发生产；不等待 CI 绿灯。",
+      "evidence": [
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:c1d64fbeed603e65f125f1891a828f7818bee03fdf24ee6922534db7e5c868d3"
+        }
+      ]
+    },
+    {
+      "id": "claim_12d904fee9b9446ab56d8104d7aa0807",
+      "statement": "本地开发先执行 sh build.sh 构建远端资产，再以 npx wrangler dev 启动。",
+      "evidence": [
+        {
+          "resource": "repo://build.sh",
+          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+        }
+      ]
+    },
+    {
+      "id": "claim_de06dee5795148b887593954f7315d64",
+      "statement": "TWEETS 绑定指向 R2 桶 x-page，承载 tweet、wechat、md 三个键前缀，tweet 前缀 365 天过期。",
+      "evidence": [
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:c1d64fbeed603e65f125f1891a828f7818bee03fdf24ee6922534db7e5c868d3"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

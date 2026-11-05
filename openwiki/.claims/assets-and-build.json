@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:cdc9d8358ed0087b0afaf5e10a32842f97a1b68286b4575f44d8b3fc0a217955",
+  "claims": [
+    {
+      "id": "claim_f51f162b24414602989954d65bc97063",
+      "statement": "worker.js 导入 WATER_CSS TWITTER_CSS ARTPLAYER_JS 三种内联资产并作为参数下发，下游模块不自行 import。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+        }
+      ]
+    },
+    {
+      "id": "claim_0a1b6080369a4942bd9d5edf6798ca02",
+      "statement": "wrangler.toml 使用 [[rules]] 数组表头启用 Text module rule，否则 CSS import 拿到空对象会渲染为 [object Object]。",
+      "evidence": [
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:c1d64fbeed603e65f125f1891a828f7818bee03fdf24ee6922534db7e5c868d3"
+        }
+      ]
+    },
+    {
+      "id": "claim_16514e106f47439693b6ed544659fa1e",
+      "statement": "build.sh 用 JSON.stringify 包装 artplayer.js 生成 artplayer.mjs，避免 esbuild minify 后反引号模板字面量展开出错。",
+      "evidence": [
+        {
+          "resource": "repo://build.sh",
+          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+        }
+      ]
+    },
+    {
+      "id": "claim_855b53a022c541bdb30dd16e4f6c82bd",
+      "statement": "build.sh 构建 markdown-it.mjs：npm 安装 markdown-it@14.1.0 后 esbuild bundle，并把默认导出重写为 MarkdownIt 命名导出。",
+      "evidence": [
+        {
+          "resource": "repo://build.sh",
+          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+        }
+      ]
+    },
+    {
+      "id": "claim_b83b4785742c4b859357089c58e4ff3b",
+      "statement": "build.sh 构建 highlight.mjs：拼接 highlight.js core + 15 种内置语言模块与 GitHub 主题 CSS，暴露代码高亮导出。",
+      "evidence": [
+        {
+          "resource": "repo://build.sh",
+          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+        }
+      ]
+    },
+    {
+      "id": "claim_23d435a81e044d669db0588be2191a3a",
+      "statement": "CI deploy 工作流运行 npx wrangler deploy 后通过 Cloudflare API 重新 PATCH 启用 Worker Cache。",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/deploy.yaml",
+          "version": "repo-file-v1:sha256:87be8abed08537b9b1ca0a0844402c57f710d7f00b3e1d3231e7ca5b66fa052d"
+        }
+      ]
+    },
+    {
+      "id": "claim_c2424306f4e247f8812ab5502fab3c01",
+      "statement": "wrangler.toml 的 [build].command 规定 Wrangler 部署前自动执行 sh build.sh 下载并构建远端资产。",
+      "evidence": [
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:c1d64fbeed603e65f125f1891a828f7818bee03fdf24ee6922534db7e5c868d3"
+        }
+      ]
+    },
+    {
+      "id": "claim_81c4074f9f05455a8a0dc6b7a5c75054",
+      "statement": "/github/ 的代码块由 Worker 端调用 HLJS.highlightCode 在 Worker 渲染，浏览器零 JS。",
+      "evidence": [
+        {
+          "resource": "repo://routes/github.js",
+          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_3728b27ae8a54769b83eeffe5eb25082",
+      "statement": "video 路由页 style 注入 WATER_CSS 与 HLJS_THEME_CSS，script 注入 ARTPLAYER_JS 以构成自包含页面。",
+      "evidence": [
+        {
+          "resource": "repo://routes/video.js",
+          "version": "repo-file-v1:sha256:fd576ccc53eb08146849b6a0cf6b2a630599878eaa6ba2202c76fd8dc10b783d"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

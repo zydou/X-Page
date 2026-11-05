@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:6e10a501ef53cf9a6f4e09d5d656056c5a9bf6f0bee5956c1d2cd812647bc291",
+  "claims": [
+    {
+      "id": "claim_3fb58917af5a446e80f00d3e8fb556ca",
+      "statement": "/html/ 用 Cloudflare HTMLRewriter 改写 img/video/script/link/a 等标签的资源路径为 /proxy/ 与 /html/ 内部路径。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+        }
+      ]
+    },
+    {
+      "id": "claim_cccf0445140443d9aea0a51c8c15afc4",
+      "statement": "HTML 抓取默认使用 iOS 微信 UA，可由 wrangler vars UA 覆盖，并带自家域名 Referer 绕过图片防盗链。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+        }
+      ]
+    },
+    {
+      "id": "claim_5f88e0026bc1413d96631338fa849599",
+      "statement": "<img> 与 <source> 在 src 为空但有 data-src 时补 src，srcset 只有条目时取最后一项，为 toMarkdown 保留图片做兜底。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+        }
+      ]
+    },
+    {
+      "id": "claim_4f13d430345a4d0289c35caa4cf472d9",
+      "statement": "/wechat/ 用 R2 wechat/ 前缀键永久缓存渲染后 HTML，命中不再过期，边缘缓存设 no-store。",
+      "evidence": [
+        {
+          "resource": "repo://routes/wechat.js",
+          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+        }
+      ]
+    },
+    {
+      "id": "claim_ac0ff6ba8aac420fbd6f70af9dc0a396",
+      "statement": "/wechat/ 的标题被 transform 钩子包上回原文的 <a> 链接，Markdown 变体额外裁掉 js_tags_preview_toast 页脚与 js_novel_card 推广卡片。",
+      "evidence": [
+        {
+          "resource": "repo://routes/wechat.js",
+          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+        }
+      ]
+    },
+    {
+      "id": "claim_c44210624bec429ea525907b34bc05a7",
+      "statement": "Markdown 协商必须先短路交给 serveHtml 的 Markdown 管线，否则 R2 命中分支会把缓存 HTML 返回给 Markdown 客户端。",
+      "evidence": [
+        {
+          "resource": "repo://routes/wechat.js",
+          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+        }
+      ]
+    },
+    {
+      "id": "claim_1475e2c5dfdc4559997706b65245a3ff",
+      "statement": "改写抛异常时 /html/ 重新抓一次上游并原样回退，保证页面至少能看。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+        }
+      ]
+    },
+    {
+      "id": "claim_5d2b65050382470591e5ed00c5f49cf6",
+      "statement": "微信公众号视频无法代理：播放器依赖 document.referrer 白名单与短时鉴权 mp4 URL，当前结论为不值得做。",
+      "evidence": [
+        {
+          "resource": "repo://routes/wechat.js",
+          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

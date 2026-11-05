@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:43176713f5868685dcaa8dbd034913e2d7918810b0e85308d0713a96f90e1634",
+  "claims": [
+    {
+      "id": "claim_a1c92053a85846869dc5e91a6985defb",
+      "statement": "Workers AI toMarkdown 对 HTML 是纯确定性解析，消耗 0 Neuron，不占用免费套餐 10000 Neurons 池。",
+      "evidence": [
+        {
+          "resource": "repo://lib/to-markdown.js",
+          "version": "repo-file-v1:sha256:2908d69c15b194cb02d58c76446867b29d2b3f862f696670ecee0b60ad8476d9"
+        }
+      ]
+    },
+    {
+      "id": "claim_c9b316310a4e4cedb32f5dd7a1f3961e",
+      "statement": "相对 URL 绝对化用注入 <base href> 完成，因为 conversionOptions.html.hostname 经 Worker 绑定被静默忽略。",
+      "evidence": [
+        {
+          "resource": "repo://lib/to-markdown.js",
+          "version": "repo-file-v1:sha256:2908d69c15b194cb02d58c76446867b29d2b3f862f696670ecee0b60ad8476d9"
+        }
+      ]
+    },
+    {
+      "id": "claim_cbeaeaec48fe4e21ba68004328769e56",
+      "statement": "转换结果按 md/<route>/<target> 落 R2 永久保留，?refresh= 是唯一强刷新入口。",
+      "evidence": [
+        {
+          "resource": "repo://lib/to-markdown.js",
+          "version": "repo-file-v1:sha256:2908d69c15b194cb02d58c76446867b29d2b3f862f696670ecee0b60ad8476d9"
+        }
+      ]
+    },
+    {
+      "id": "claim_cbe4239a0dbd44988b570e3774e997d7",
+      "statement": "/html/ 与 /wechat/ 的 Markdown 转换用独立 R2 key 隔离，命中判断在 Markdown 协商时先短路。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+        }
+      ]
+    },
+    {
+      "id": "claim_21709134d6fe42499d0de5016aed559e",
+      "statement": "MAX_INPUT_CHARS 拦截约 4 MiB 以上的 HTML 输入快速返回 502 而非等待服务端 41 秒后返回 6006。",
+      "evidence": [
+        {
+          "resource": "repo://lib/to-markdown.js",
+          "version": "repo-file-v1:sha256:2908d69c15b194cb02d58c76446867b29d2b3f862f696670ecee0b60ad8476d9"
+        }
+      ]
+    },
+    {
+      "id": "claim_20e18d96bdc842b1aa20d739fbfd78cf",
+      "statement": "/github/ 的 Markdown 由 Worker 端 markdown-it 实例解析，代码块通过 highlight 回调交给 highlight.js 着色。",
+      "evidence": [
+        {
+          "resource": "repo://lib/markdown.js",
+          "version": "repo-file-v1:sha256:b623c00628bb32477036cd54dab9afb808f5ebb4ba76be7d40a34cd9d407a6ef"
+        }
+      ]
+    },
+    {
+      "id": "claim_b43f66c1396d484884068140da552a08",
+      "statement": "转换器会把 URL 中下划线过度编码为 %5F，功能无损但对 Agent 客户可见，决定接受不修。",
+      "evidence": [
+        {
+          "resource": "repo://lib/to-markdown.js",
+          "version": "repo-file-v1:sha256:2908d69c15b194cb02d58c76446867b29d2b3f862f696670ecee0b60ad8476d9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

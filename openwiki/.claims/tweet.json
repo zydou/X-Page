@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:9ab7fe7cffa2cb4a367e81d28481b98c9c7ac7410a88b244969a1d0b5a398c87",
+  "claims": [
+    {
+      "id": "claim_5e3faac959e74ae19f00cc86252f7a6b",
+      "statement": "推文路由的 mode 缺省为 all，非法值同样回退 all，可选 self、quote、thread 三种过滤模式。",
+      "evidence": [
+        {
+          "resource": "repo://routes/tweet.js",
+          "version": "repo-file-v1:sha256:978da42ec48d3bc95dd861490c26b397a917eb890462a1ee161a8c537e25665e"
+        }
+      ]
+    },
+    {
+      "id": "claim_534769fc071e490dbf6ac8dd8d305fa8",
+      "statement": "翻译语言由 ?lang= 优先于 TRANSLATE_TO 环境变量决定，译文由 fxtwitter 的 translation 字段提供。",
+      "evidence": [
+        {
+          "resource": "repo://routes/tweet.js",
+          "version": "repo-file-v1:sha256:978da42ec48d3bc95dd861490c26b397a917eb890462a1ee161a8c537e25665e"
+        }
+      ]
+    },
+    {
+      "id": "claim_fc3f4e24e33447d4b921acacbc26da68",
+      "statement": "推文 R2 键带语言维度 tweet/<id>.<lang>.json，不同语言各存一份，避免缓存串扰。",
+      "evidence": [
+        {
+          "resource": "repo://routes/tweet.js",
+          "version": "repo-file-v1:sha256:978da42ec48d3bc95dd861490c26b397a917eb890462a1ee161a8c537e25665e"
+        }
+      ]
+    },
+    {
+      "id": "claim_c3f1f6fe70634257a7a17e4ae3d01956",
+      "statement": "lib/thread.js 的墓碑判定为无作者无正文，或 type 等于 tombstone 或无 id。",
+      "evidence": [
+        {
+          "resource": "repo://lib/thread.js",
+          "version": "repo-file-v1:sha256:a9027cea57944db839bebc35468f3b101265c1686e6e74a42a713143d9f0a2cc"
+        }
+      ]
+    },
+    {
+      "id": "claim_de13489b019247328bd229afda393575",
+      "statement": "补全门控只在 thread 出现墓碑或存在同作者回复链接时触发，单推与他人回复不增加额外请求。",
+      "evidence": [
+        {
+          "resource": "repo://lib/thread.js",
+          "version": "repo-file-v1:sha256:a9027cea57944db839bebc35468f3b101265c1686e6e74a42a713143d9f0a2cc"
+        }
+      ]
+    },
+    {
+      "id": "claim_9f4b41d339704037bb690d9c4e02b560",
+      "statement": "自推链补全以根推为起点按 replying_to 闭包收集同作者回复，单个被删推时从会话祖先推出墓碑父节点。",
+      "evidence": [
+        {
+          "resource": "repo://lib/thread.js",
+          "version": "repo-file-v1:sha256:a9027cea57944db839bebc35468f3b101265c1686e6e74a42a713143d9f0a2cc"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

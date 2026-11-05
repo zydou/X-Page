@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:5fb1dffe18a8a0befed4650be26f5a2e9b02781601bb769b7f953a74d262e558",
+  "claims": [
+    {
+      "id": "claim_219822b25a2e4d0a9961148356ee3ddf",
+      "statement": "POST /webhook 入口要求 X-Telegram-Bot-Api-Secret-Token 头与 WEBHOOK_SECRET 一致，否则返回 403 fail-closed。",
+      "evidence": [
+        {
+          "resource": "repo://routes/webhook.js",
+          "version": "repo-file-v1:sha256:1451cd21bbc45a998f3c4bdb50952871333ec50091fea52ff9c899afe16d5ebc"
+        }
+      ]
+    },
+    {
+      "id": "claim_150f24b358ff46a6a4b430ad820ea500",
+      "statement": "webhook 处理通过 ctx.waitUntil 异步执行，前台立即返回 200 以避免 Telegram 重复投递。",
+      "evidence": [
+        {
+          "resource": "repo://routes/webhook.js",
+          "version": "repo-file-v1:sha256:1451cd21bbc45a998f3c4bdb50952871333ec50091fea52ff9c899afe16d5ebc"
+        }
+      ]
+    },
+    {
+      "id": "claim_8c414855a5044bff9b3c0a3b81aea9e1",
+      "statement": "matcher.js 的 buildReply 按 X、GitHub、微信、通用 URL 顺序优先级生成 X-Page 链接，无匹配时返回空字符串静默不回复。",
+      "evidence": [
+        {
+          "resource": "repo://lib/bot/matcher.js",
+          "version": "repo-file-v1:sha256:e1fe9a36190af61db948116cf3337d630fb63cfcf0c5cd7ad36e310c6224b1a3"
+        }
+      ]
+    },
+    {
+      "id": "claim_359af8cfdf8f40e38447233c4e4ae9d4",
+      "statement": "GitHub 链接转换时 releases 开头的列表页不做转换，blob 路径会剥掉 blob/<branch>/ 前缀保留文件路径。",
+      "evidence": [
+        {
+          "resource": "repo://lib/bot/matcher.js",
+          "version": "repo-file-v1:sha256:e1fe9a36190af61db948116cf3337d630fb63cfcf0c5cd7ad36e310c6224b1a3"
+        }
+      ]
+    },
+    {
+      "id": "claim_abcf03ca4b554315abd29d6fffe125ac",
+      "statement": "媒体处理策略为图片优先 Imgur 失败回退 ImgBB，视频只走 Imgur，超过 20MB 的文件直接拒绝并提示改用链接。",
+      "evidence": [
+        {
+          "resource": "repo://lib/bot/media.js",
+          "version": "repo-file-v1:sha256:01899091e2860e7b0a3d6bc385692b5e9b75e41bc0033ef8178016dfc3d1a83a"
+        }
+      ]
+    },
+    {
+      "id": "claim_911424dc7a1948e98ec204bcf1fc2ba3",
+      "statement": "sendMessage 不设 parse_mode 并关闭 link_preview_options，让多行链接回复中的裸 URL 自动可点击且不渲染预览。",
+      "evidence": [
+        {
+          "resource": "repo://lib/bot/telegram.js",
+          "version": "repo-file-v1:sha256:e2de50733b9cc11f34192b5e8df9e66ade05cc6be5d2bc554fec715d6872c140"
+        }
+      ]
+    },
+    {
+      "id": "claim_e91d4b039ca54483a021d22e1d5cfcf8",
+      "statement": "ALLOWED_CHATS 白名单支持 chat 任意 thread 或 chat:thread 精确匹配，未配置时响应所有来源。",
+      "evidence": [
+        {
+          "resource": "repo://routes/webhook.js",
+          "version": "repo-file-v1:sha256:1451cd21bbc45a998f3c4bdb50952871333ec50091fea52ff9c899afe16d5ebc"
+        }
+      ]
+    },
+    {
+      "id": "claim_5df7a17ea92941e790052eea0f8676ca",
+      "statement": "X_PAGE_BASE 必须由调用方从 Secret 传入，缺失时拒绝转换并回复配置错误提示。",
+      "evidence": [
+        {
+          "resource": "repo://routes/webhook.js",
+          "version": "repo-file-v1:sha256:1451cd21bbc45a998f3c4bdb50952871333ec50091fea52ff9c899afe16d5ebc"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

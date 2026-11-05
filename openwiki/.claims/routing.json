@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:0db566d6dc47d28a6f05c8cbb7710da9ba6a6d9c1537877824a7395d3d338af3",
+  "claims": [
+    {
+      "id": "claim_43cdeab24c3b497d9a1274ff7f71ff04",
+      "statement": "worker.js 按根、favicon、webhook、vid、img、html、wechat、proxy、github、推文兜底的顺序分发请求。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+        }
+      ]
+    },
+    {
+      "id": "claim_ebd4ddf78a4d47cfbecf8f3cd4fe92cd",
+      "statement": "推文路由是最宽泛的形态，必须作为兜底最后匹配，固定前缀子路由都插在其之前。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+        }
+      ]
+    },
+    {
+      "id": "claim_46aea97349904956b70d51f13e5e5698",
+      "statement": "WATER_CSS、TWITTER_CSS、ARTPLAYER_JS 与 highlight 由入口 import 后作为参数下发，下游模块不自行 import。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+        }
+      ]
+    },
+    {
+      "id": "claim_b69b95911c6c4ca786a998560ae1e026",
+      "statement": "入口对 pathname 只做一次可选 decodeURIComponent，解码失败保留原值由下游再 decode。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

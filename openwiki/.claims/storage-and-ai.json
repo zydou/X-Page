@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:f39de54d663b1bcecb1a483c37874fe35f56e35fd2fb643437d79f1b7bfc970f",
+  "claims": [
+    {
+      "id": "claim_850e2e6810db4a52940f2304cd8eb254",
+      "statement": "R2 绑定 TWEETS 指向桶 x-page，承载 tweet、wechat、md 三种键前缀，tweet 前缀 365 天 lifecycle 过期。",
+      "evidence": [
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:c1d64fbeed603e65f125f1891a828f7818bee03fdf24ee6922534db7e5c868d3"
+        }
+      ]
+    },
+    {
+      "id": "claim_45a3ede6d516449099b3b8248294a8cd",
+      "statement": "wechat 与 md 前缀无过期规则永久保留，防原文删除或重复转换。",
+      "evidence": [
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:c1d64fbeed603e65f125f1891a828f7818bee03fdf24ee6922534db7e5c868d3"
+        }
+      ]
+    },
+    {
+      "id": "claim_f56dd3b9da464dccb3cc40b2bafee624",
+      "statement": "Workers AI toMarkdown 是纯确定性解析，消耗 0 Neuron，不碰免费套餐 10000 Neurons 池。",
+      "evidence": [
+        {
+          "resource": "repo://lib/to-markdown.js",
+          "version": "repo-file-v1:sha256:2908d69c15b194cb02d58c76446867b29d2b3f862f696670ecee0b60ad8476d9"
+        }
+      ]
+    },
+    {
+      "id": "claim_b036599cba3546febac3725841969b05",
+      "statement": "TIMEZONE 与 TRANSLATE_TO 通过 wrangler vars 配置推文时区与默认翻译语言。",
+      "evidence": [
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:c1d64fbeed603e65f125f1891a828f7818bee03fdf24ee6922534db7e5c868d3"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}

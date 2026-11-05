@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:c3be479c22caa4fb604e217bc449383b4f46cf21f64e0d9bb6d43959edf5d7db",
+  "claims": [
+    {
+      "id": "claim_a719d18450794e24a0f9e027c75a6d86",
+      "statement": "/proxy/ 透传 Range 请求头并写死 1 年 immutable 缓存与强制 inline Content-Disposition。",
+      "evidence": [
+        {
+          "resource": "repo://routes/proxy.js",
+          "version": "repo-file-v1:sha256:c5dd963faea3085f3904187c14ae351c9ebc810bdf448b09bd4432a83938e92f"
+        }
+      ]
+    },
+    {
+      "id": "claim_337e2e6b665b46dea768385d29ebd484",
+      "statement": "/proxy/ 会改写 JS/CSS 内容中的 import、from 与 url 相对 URL 为 /proxy/ 绝对代理路径。",
+      "evidence": [
+        {
+          "resource": "repo://routes/proxy.js",
+          "version": "repo-file-v1:sha256:c5dd963faea3085f3904187c14ae351c9ebc810bdf448b09bd4432a83938e92f"
+        }
+      ]
+    },
+    {
+      "id": "claim_24e8f4f8c7624d84b50f6d1e209948e7",
+      "statement": "/vid/ 代理模式喂给 Artplayer 的是 /proxy/ 路径，直连模式用原始 URL，Artplayer JS 直接内联进 script。",
+      "evidence": [
+        {
+          "resource": "repo://routes/video.js",
+          "version": "repo-file-v1:sha256:fd576ccc53eb08146849b6a0cf6b2a630599878eaa6ba2202c76fd8dc10b783d"
+        }
+      ]
+    },
+    {
+      "id": "claim_b9b62c97913648d196e35ed768efc693",
+      "statement": "/github/ 文档路径走 raw 源码加 markdown-it Worker 端渲染，而非 github.html，避免 private-user-images JWT 图片死链。",
+      "evidence": [
+        {
+          "resource": "repo://routes/github.js",
+          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_7749b90bed85438ba5e481e1676b315e",
+      "statement": "GitHub 文档中的图片改写优先取 data-canonical-src，其次用 src；相对路径按 raw.githubusercontent.com 的文件目录解析。",
+      "evidence": [
+        {
+          "resource": "repo://routes/github.js",
+          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_afc284fde3b741ad9f306fe783074171",
+      "statement": "代码文件走 highlight.mjs Worker 端高亮：内置语言直接着色，非内置按需从 CDN 拉语言模块，超 200000 字符退化为纯文本。",
+      "evidence": [
+        {
+          "resource": "repo://routes/github.js",
+          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+        }
+      ]
+    },
+    {
+      "id": "claim_0af21a4727b8424d947f6f317fac2072",
+      "statement": "/github/ 的 @ref 检测在未 decode 的原始路径上完成，使分支名含斜杠编码 %2F 时仍是一个段位。",
+      "evidence": [
+        {
+          "resource": "repo://routes/github.js",
+          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.9.0",
+    "at": "2026-11-05T11:10:10.273Z"
+  }
+}
