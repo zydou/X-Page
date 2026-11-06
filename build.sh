@@ -3,7 +3,22 @@ set -e
 
 echo "=== x-page build: downloading & building remote assets ==="
 
-# ── 1. Build markdown-it.mjs ───────────────────────────────────
+# ── 1. Wrap artplayer.js as ES module ──────────────────────────
+if [ -f artplayer.mjs ]; then
+  echo "-> artplayer.mjs already exists, skipping."
+else
+  echo "-> Fetching artplayer.js..."
+  curl -fsSL https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js -o artplayer.js
+  echo "-> Wrapping artplayer.js as ES module..."
+  node -e '
+  const fs = require("fs");
+  const src = fs.readFileSync("artplayer.js", "utf8");
+  fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n");
+  console.log("OK artplayer.mjs generated (" + src.length + " bytes)");
+  '
+fi
+
+# ── 2. Build markdown-it.mjs ───────────────────────────────────
 if [ -f markdown-it.mjs ]; then
   echo "-> markdown-it.mjs already exists, skipping."
 else
@@ -22,7 +37,7 @@ else
   echo "OK markdown-it.mjs generated (" $(wc -c < markdown-it.mjs) "bytes)"
 fi
 
-# ── 2. Build highlight.mjs ─────────────────────────────────────
+# ── 3. Build highlight.mjs ─────────────────────────────────────
 if [ -f highlight.mjs ]; then
   echo "-> highlight.mjs already exists, skipping."
 else
@@ -50,7 +65,7 @@ else
   sed -i 's/&&(module\.exports=hljs)//g' highlight.mjs
 fi
 
-# ── 3. Build assets/github.css (merge trimmed water + hljs theme + .gh-* styles) ──
+# ── 4. Build assets/github.css (merge trimmed water + hljs theme + .gh-* styles) ──
 # assets/github.css is committed to the repo (contains the merged CSS), but the HLJS theme
 # inside it comes from highlight.mjs. If highlight.mjs was just built, rebuild github.css.
 if [ -f assets/github.css ]; then
@@ -60,7 +75,7 @@ else
 fi
 
 # ── Clean up intermediate files ────────────────────────────────
-rm -f highlight.min.js github.min.css github-dark.min.css
+rm -f artplayer.js highlight.min.js github.min.css github-dark.min.css
 rm -rf build/
 rm -f water-trimmed.css hljs-theme.css
 
