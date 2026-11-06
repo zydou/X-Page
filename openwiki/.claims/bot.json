@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:e7b831f127a67020b42ea1c3e3526373f88584344c490d5bb3235e496e78e6c7",
+  "pageVersion": "sha256:cd50d69f05583102ad373933d664e7b638c90c13e236a460b3e5e372cf486bb4",
   "claims": [
     {
       "id": "claim_219822b25a2e4d0a9961148356ee3ddf",
@@ -8,7 +8,7 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:ea83120c35edc65d6da02b1b3e1e18acc8af9540305de4ed1e971e0cbe3627cf"
+          "version": "repo-file-v1:sha256:55f40d239e1b4a40c4445ec69bdb61754cff48c5952be106a866953b1537d260"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:ea83120c35edc65d6da02b1b3e1e18acc8af9540305de4ed1e971e0cbe3627cf"
+          "version": "repo-file-v1:sha256:55f40d239e1b4a40c4445ec69bdb61754cff48c5952be106a866953b1537d260"
         }
       ]
     },
@@ -28,7 +28,7 @@
       "evidence": [
         {
           "resource": "repo://lib/bot/matcher.js",
-          "version": "repo-file-v1:sha256:353d80746c52ed006983c6317f70b024333714e4aabecca8faa7e2fde86b0741"
+          "version": "repo-file-v1:sha256:e6371770b69843e7547380e2101571fbeaf6a361e3436215d7941593cde16147"
         }
       ]
     },
@@ -38,7 +38,7 @@
       "evidence": [
         {
           "resource": "repo://lib/bot/matcher.js",
-          "version": "repo-file-v1:sha256:353d80746c52ed006983c6317f70b024333714e4aabecca8faa7e2fde86b0741"
+          "version": "repo-file-v1:sha256:e6371770b69843e7547380e2101571fbeaf6a361e3436215d7941593cde16147"
         }
       ]
     },
@@ -68,7 +68,7 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:ea83120c35edc65d6da02b1b3e1e18acc8af9540305de4ed1e971e0cbe3627cf"
+          "version": "repo-file-v1:sha256:55f40d239e1b4a40c4445ec69bdb61754cff48c5952be106a866953b1537d260"
         }
       ]
     },
@@ -78,23 +78,33 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:ea83120c35edc65d6da02b1b3e1e18acc8af9540305de4ed1e971e0cbe3627cf"
+          "version": "repo-file-v1:sha256:55f40d239e1b4a40c4445ec69bdb61754cff48c5952be106a866953b1537d260"
         }
       ]
     },
     {
       "id": "claim_3eba36b921f8417797c25b7c528a9bd0",
-      "statement": "回复后会预热真实页面写 R2：推文请求不带 ?mode=/ ?lang= 的默认 URL，微信请求 /wechat/<url>，其它平台不预热",
+      "statement": "回复后会预热真实页面写 R2：推文用 prewarmTweet、微信用 prewarmWechat 内部直调写 R2，其它平台不预热",
+      "evidence": [
+        {
+          "resource": "repo://routes/webhook.js",
+          "version": "repo-file-v1:sha256:55f40d239e1b4a40c4445ec69bdb61754cff48c5952be106a866953b1537d260"
+        }
+      ]
+    },
+    {
+      "id": "claim_c467e5bee3484067b4c39804ddb5ac4c",
+      "statement": "预热改为内部直调：推文走 prewarmTweet、微信走 prewarmWechat，目标由 buildPrewarmTargets 给出，绕开自家域名 fetch 撞 CF 边缘 522",
       "evidence": [
         {
           "resource": "repo://lib/bot/matcher.js",
-          "version": "repo-file-v1:sha256:353d80746c52ed006983c6317f70b024333714e4aabecca8faa7e2fde86b0741"
+          "version": "repo-file-v1:sha256:e6371770b69843e7547380e2101571fbeaf6a361e3436215d7941593cde16147"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-05T16:28:31.398Z"
+    "at": "2026-11-06T01:57:17.825Z"
   }
 }

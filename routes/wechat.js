@@ -247,3 +247,52 @@ export async function serveWechat(request, env, ctx) {
   headers.set("x-cache", "miss");
   return new Response(html, { status: resp.status, headers });
 }
+
+/**
+ * 预热专用入口：抓取原文、包标题链接、写回 R2，不做 HTML/markdown 视图渲染之外的事。
+ *
+ * 供 Telegram bot 在回复链接后内部直调预热使用，绕开自家域名 fetch
+ * 容易撞的 Cloudflare 边缘 522（wechat 写 R2 的就是最终渲染 HTML，
+ * 这段逻辑与 serveWechat 的 miss 路径共用）。R2 命中则跳过抓取。
+ *
+ * @param {string} target 文章原文 URL（https://mp.weixin.qq.com/s...）
+ * @param {Object} env Worker 环境（含 R2 绑定 TWEETS / UA）
+ * @param {Object} ctx Worker ExecutionContext（用于后台写回 R2）
+ * @returns {Promise<boolean|null>} true = R2 命中或本次写回完成，false = 上游/抓取失败
+ */
+export async function prewarmWechat(target, env, ctx) {
+  if (!target) return null;
+  if (!/^https?:\/\//i.test(target)) target = "http://" + target;
+
+  const r2Key = "wechat/" + target;
+
+  // 命中 R2 跳过；损坏缓存则继续走抓取
+  if (env?.TWEETS) {
+    const obj = await env.TWEETS.get(r2Key);
+    if (obj) {
+      try {
+        const cached = await obj.text();
+        if (cached) return true;
+      } catch {
+        /* 损坏的缓存忽略，重新抓取 */
+      }
+    }
+  }
+
+  const ua = (env && env.UA) || "Mozilla/5.0";
+  // 复用 serveHtml 的抓取与改写：构造仅供解析用的 Request，路径塞 encode 后的 target
+  const fakeRequest = new Request(`https://__prewarm__/wechat/${encodeURIComponent(target)}`);
+  const resp = await serveHtml(fakeRequest, env, ctx, transformWechat, "/wechat/");
+  if (!resp.ok) return false;
+
+  const html = await resp.text();
+  // 与 serveWechat 一致：后台把最终 HTML 落回 R2
+  if (env?.TWEETS && ctx) {
+    ctx.waitUntil(
+      env.TWEETS.put(r2Key, html, { httpMetadata: { contentType: "text/html" } }).catch(() => {})
+    );
+  } else if (env?.TWEETS) {
+    await env.TWEETS.put(r2Key, html, { httpMetadata: { contentType: "text/html" } });
+  }
+  return true;
+}

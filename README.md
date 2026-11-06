@@ -203,7 +203,7 @@ Telegram 把每条更新 POST 到 `setWebhook` 指定的 URL；设置 `secret_to
 
 全部回复为纯文本模式（Telegram 自动把裸 URL 变可点击）。媒体不落 R2，容量交给图床；Telegram Bot API 单文件下载上限 20MB。
 
-推文与微信链接在回复发送后会由 bot 自动请求一次对应页面提前写入 R2（`tweet/` / `wechat/` 前缀），用户打开时直接命中缓存，无需等待首次回源。
+推文与微信链接在回复发送后会由 bot 内部直接调用对应路由预热 R2（`tweet/` / `wechat/` 前缀），用户打开时直接命中缓存，无需等待首次回源。
 
 ### ⚠️ 注意事项
 

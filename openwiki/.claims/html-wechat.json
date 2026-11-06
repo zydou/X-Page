@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:6e10a501ef53cf9a6f4e09d5d656056c5a9bf6f0bee5956c1d2cd812647bc291",
+  "pageVersion": "sha256:6dfad18d5cf5901aeff8aaf7944fa57844e772bfb67a3e704a38ca46e87db784",
   "claims": [
     {
       "id": "claim_3fb58917af5a446e80f00d3e8fb556ca",
@@ -38,7 +38,7 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
         }
       ]
     },
@@ -48,7 +48,7 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
         }
       ]
     },
@@ -58,7 +58,7 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
         }
       ]
     },
@@ -78,13 +78,23 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:dadef5fd577ad3823abc6cd140236d7cb883c511c508ff27897a701e36f344c8"
+          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
+        }
+      ]
+    },
+    {
+      "id": "claim_d1c874d03454414182f85f63f3c7b205",
+      "statement": "prewarmWechat 是内部直调预热入口：命中 R2 跳过；损坏缓存回源抓取；复用 serveHtml 抓取与改写，最终 HTML 写回 R2",
+      "evidence": [
+        {
+          "resource": "repo://routes/wechat.js",
+          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-05T11:10:10.273Z"
+    "at": "2026-11-06T01:57:17.825Z"
   }
 }

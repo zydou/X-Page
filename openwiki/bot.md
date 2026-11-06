@@ -5,7 +5,7 @@ description: 介绍 Telegram 转换机器人的 webhook 安全模型与链接转
 tags: [Telegram, Bot, webhook, 链接转换]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-05T16:28:31.398Z
+    at: 2026-11-06T01:57:17.825Z
 sources:
   - id: openwiki-source-3dec53bd176af78782129d6d
     resource: repo://lib/bot/matcher.js
@@ -15,7 +15,7 @@ sources:
     resource: repo://lib/bot/telegram.js
   - id: openwiki-source-7ac255018a231eb231733c3f
     resource: repo://routes/webhook.js
-generated: { by: "claude-code", at: "2026-11-05T16:28:31.398Z" }
+generated: { by: "claude-code", at: "2026-11-06T01:57:17.825Z" }
 ---
 
 # Telegram 机器人
@@ -91,14 +91,14 @@ generated: { by: "claude-code", at: "2026-11-05T16:28:31.398Z" }
 
 发送前会先 `sendChatAction()` 打 `typing` / `upload_photo` / `upload_video` 动作，让长任务有即时反馈（`routes/webhook.js:80,88-89,95`）。
 
-## 7 预热：回复后请求一次真实页面写 R2
+## 7 预热：回复后内部直调预热写 R2
 
-`sendMessage()` 之后，文本通道会按 `buildPrewarmUrls(text, xPageBase)` 算出的 URL 列表逐个 GET 一次对应页面（`prewarmCache`，`routes/webhook.js`），触发真实路由回源并写 R2，让用户点开链接时直接命中缓存。
+`sendMessage()` 之后，文本通道会按 `buildPrewarmTargets(text)` 算出的目标数组逐个内部直调预热（`prewarmCache`，`routes/webhook.js` ），触发真实路由回源并写 R2，让用户点开链接时直接命中缓存。
 
-- 只覆盖会写 R2 的两条路由：X/Twitter → 不带 `?mode=`/`?lang=` 的推文页（R2 key 只跟 lang 维度有关，与 mode 无关，一次足够）；微信公众号 → `/wechat/<url>`（即 HTML 写 R2 的 key）。
-- GitHub、通用媒体 URL 等不落 R2 的平台不做预热，`buildPrewarmUrls` 返回空数组。
-- 每条请求带 `AbortSignal.timeout(60000)` 防长尾挂起，并 `await res.arrayBuffer()` 消费 body（推文在 handler 内部 `waitUntil` 后台写 R2，不读完可能不落盘）。
-- 失败/超时/非 2xx 只记 `console.error("prewarm 失败:", ...)`，绝不重试也不通知用户；回复已在预热前发完，预热失败完全无感。
+- 只覆盖会写 R2 的两条路由：X/Twitter → `prewarmTweet(pid, env, ctx)`（内部调 `fetchTweetData`，R2 key 只跟 lang 维度有关，与 mode 无关，一次足够）；微信公众号 → `prewarmWechat(url, env, ctx)`（复用 `serveHtml` 抓取与改写，最终 HTML 写 R2）。
+- GitHub、通用媒体 URL 等不落 R2 的平台不做预热，`buildPrewarmTargets` 返回空数组。
+- 为什么内部直调而非 GET 自家域名：`wrangler tail` 实测自 fetch 自定义域名撞 Cloudflare 边缘缓存层 522（`prewarm 失败: HTTP 522`），直接调用 handler 完全走 Worker 内部链路、不经边缘。
+- 失败只记 `console.error("prewarm 失败:", ...)`，不重试也不通知用户；回复已在预热前发完，预热失败完全无感。
 
 ## 8 错误处理与白名单之外的容错
 

@@ -16,9 +16,11 @@
  * ============================================================
  */
 
-import { buildReply, buildPrewarmUrls } from "../lib/bot/matcher.js";
+import { buildReply, buildPrewarmTargets } from "../lib/bot/matcher.js";
 import { sendMessage, sendChatAction } from "../lib/bot/telegram.js";
 import { mediaTypeOf, handleMedia } from "../lib/bot/media.js";
+import { prewarmTweet } from "./tweet.js";
+import { prewarmWechat } from "./wechat.js";
 
 const HELP = `X-Page 转换机器人
 ──────────────
@@ -38,29 +40,30 @@ const HELP = `X-Page 转换机器人
  * @returns {Response}
  */
 /**
- * webhook 内部对自家域名做 GET 预热：触发真实路由回源并写 R2，
+ * webhook 内部直接调用路由 handler 预热 R2：触发真实回源并写 R2，
  * 让用户点开转换链接时直接命中缓存，无需首次等待。
  *
- * 逐个请求、忽略失败（timeout / 非 2xx / 读 body 出错）：缓存只是优化，
- * 预热失败下次真实请求仍会正常回源，绝不影响已发送的回复。
- * 仅供推文 / 微信两条写 R2 的路由使用（见 matcher.js buildPrewarmUrls）。
+ * 内部直调而非 GET 自家域名：自 fetch 自定义域名容易撞 Cloudflare
+ * 边缘缓存层 522（wrangler tail 实测 `prewarm 失败: HTTP 522`），
+ * 直接调 handler 则完全走 Worker 内部链路、不经边缘。
  *
- * @param {string[]} urls buildPrewarmUrls 算出的页面地址
+ * 逐个执行、忽略失败（上游超时 / R2 写失败）：缓存只是优化，
+ * 预热失败下次真实请求仍会正常回源，绝不影响已发送的回复。
+ *
+ * @param {object[]} targets buildPrewarmTargets 算出的目标
+ * @param {object} env Worker 环境
+ * @param {object} ctx Worker ExecutionContext（透传给 handler 做后台写回）
  */
-async function prewarmCache(urls) {
-  for (const u of urls) {
+async function prewarmCache(targets, env, ctx) {
+  for (const t of targets) {
     try {
-      const res = await fetch(u, {
-        headers: { "user-agent": "telegram-bot/prewarm" },
-        signal: AbortSignal.timeout(60000),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // 必须消费 body：tweet / wechat 这两条路由在 fetchAndCacheThread /
-      // waitUntil 后台写 R2，body 不读完 Worker 可能提前结束无法落盘。
-      await res.arrayBuffer();
+      const r = t.kind === "tweet"
+        ? await prewarmTweet(t.postId, env, ctx)
+        : await prewarmWechat(t.url, env, ctx);
+      if (!r) throw new Error("prewarm returned empty");
     } catch (err) {
       // 预热失败只记日志，不重试、不通知用户
-      console.error("prewarm 失败:", u, err?.message || err);
+      console.error("prewarm 失败:", JSON.stringify(t), err?.message || err);
     }
   }
 }
@@ -75,7 +78,7 @@ export async function handleWebhook(request, env, ctx) {
     return new Response("forbidden", { status: 403 });
   }
   const update = await request.json();
-  ctx.waitUntil(handleUpdate(update, env));
+  ctx.waitUntil(handleUpdate(update, env, ctx));
   return new Response("ok");
 }
 
@@ -85,7 +88,7 @@ export async function handleWebhook(request, env, ctx) {
  * @param {object} update Telegram Update
  * @param {object} env Worker 环境对象
  */
-async function handleUpdate(update, env) {
+async function handleUpdate(update, env, ctx) {
   const msg = update.message;
   if (!msg) return;
 
@@ -124,11 +127,11 @@ async function handleUpdate(update, env) {
     const reply = buildReply(text, xPageBase);
     if (reply) await sendMessage(env, msg, reply);
 
-    // 回复已发送后，后台预热真实页面 → 写 R2（见 prewarmCache）。
+    // 回复已发送后，内部直调预热写 R2（见 prewarmCache）。
     // 不在 ctx.waitUntil 里：handleUpdate 本身已跑在 webhook 的 waitUntil 中，
-    // 使它完成后再请求一次自家域名是安全的；单进程内串行等就是全部代价。
-    const urls = reply ? buildPrewarmUrls(text, xPageBase) : [];
-    if (urls.length) await prewarmCache(urls);
+    // 内部直调不经网络层，不会撞 522；单进程内串行等就是全部代价。
+    const targets = reply ? buildPrewarmTargets(text) : [];
+    if (targets.length) await prewarmCache(targets, env, ctx);
   } catch (err) {
     // 记录错误并尽力告知用户，但不让 waitUntil 静默吞掉
     console.error("handleUpdate error:", err?.message || err);

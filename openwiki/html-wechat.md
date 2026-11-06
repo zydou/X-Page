@@ -5,7 +5,7 @@ description: 梳理 HTML 抓取改写代理与微信公众号文章代理的实�
 tags: [HTML代理, 微信公众号, 改写, HTMLRewriter]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-05T11:10:10.273Z
+    at: 2026-11-06T01:57:17.825Z
 sources:
   - id: openwiki-source-191ac1117a045536f59c18b2
     resource: repo://routes/html.js

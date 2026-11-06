@@ -869,3 +869,23 @@ async function fetchAndCacheThread(apiUrl, r2Key, refresh, env, lang) {
   }
   return data;
 }
+
+/**
+ * 预热专用入口：用默认语言（无翻译）回源一次并写回 R2，不做渲染。
+ *
+ * 供 Telegram bot 在回复链接后内部直调预热使用，绕开自家域名 fetch
+ * 容易撞的 Cloudflare 边缘 522。只负责数据获取 + R2 写回，HTML /
+ * Markdown 渲染仍由后续真实请求完成。
+ *
+ * @param {string} pid 推文 ID
+ * @param {Object} env Worker 环境（含 R2 绑定 TWEETS / TRANSLATE_TO）
+ * @param {Object} ctx Worker ExecutionContext（用于后台写回 R2）
+ * @returns {Promise<{data: Object|null, fallback: boolean}|null>}
+ */
+export async function prewarmTweet(pid, env, ctx) {
+  if (!pid) return null;
+  const cfg = { lang: (env && env.TRANSLATE_TO) || "" };
+  // rawPath 只用到 pid 提取，构造一个合法形态即可
+  const rawPath = `__prewarm__/status/${pid}`;
+  return fetchTweetData(rawPath, cfg, false, env, ctx);
+}
