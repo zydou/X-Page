@@ -19,7 +19,7 @@ fallthrough = true
 # R2 bucket 绑定（生产）：tweets 与 wechat 共用同一桶 x-page
 # key 前缀：
 #   tweet/<id>.json        → fxtwitter thread JSON（未翻译）
-#   tweet/<id>.<lang>.json → 带翻译的 thread JSON（?lang= 或 TRANSLATE_TO），每种语言一份
+#   tweet/<id>.<lang>.json → 带翻译的 thread JSON（?lang= 或 TWITTER_LANG），每种语言一份
 #   wechat/<原文URL>       → 渲染后的完整 HTML（wechat 路由，防原文删除后失效）
 # lifecycle 规则（已通过 CLI 配置）：
 #   tweet/ 前缀 365 天过期：
@@ -46,10 +46,11 @@ command = "sh build.sh"
 
 [vars]
 TIMEZONE = "Asia/Shanghai"
-TRANSLATE_TO = "cn"
-PREWARM_LANGS = "cn,ja"
-# Webhook 预热语言列表：推文预热按此列表逐语言写 R2（tweet/<id>.<lang>.json）。
-# 留空则回退 TRANSLATE_TO。仅 /webhook 的 prewarmCache 使用，不影响 serveTweet 的默认渲染。
+TWITTER_LANG = "cn"
+TWITTER_PREWARM_LANGS = "cn,ja"
+# Twitter 推文翻译与 bot 预热语言列表（?lang= 覆盖 TWITTER_LANG）。
+# Webhook 预热按 TWITTER_PREWARM_LANGS 逐语言写 R2（tweet/<id>.<lang>.json）。
+# 留空则回退 TWITTER_LANG。仅 /webhook 的 prewarmCache 使用，不影响 serveTweet 的默认渲染。
 # User-Agent 覆盖：/html/ 路由抓取时的 UA。
 # 默认使用 iOS 微信内置浏览器 UA，用于绕过微信公众号白名单。
 UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.73(0x18004939) NetType/WIFI Language/zh_CN"

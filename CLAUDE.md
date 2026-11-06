@@ -38,7 +38,7 @@ x-page/
 
 | Path                             | Service |
 | -------------------------------- | ------- |
-| `/<user>/status/<id>[?mode=m][&lang=l]` | Tweet → standalone HTML; `?mode=self` / `quote` / `thread` / `all`（缺省即 `all`，全部推文）；`?lang=` 覆盖 `TRANSLATE_TO`，R2 key 带语言维度（`tweet/<id>.<lang>.json`） |
+| `/<user>/status/<id>[?mode=m][&lang=l]` | Tweet → standalone HTML; `?mode=self` / `quote` / `thread` / `all`（缺省即 `all`，全部推文）；`?lang=` 覆盖 `TWITTER_LANG`，R2 key 带语言维度（`tweet/<id>.<lang>.json`） |
 | `/vid/<raw-url>`                 | Video → player HTML (proxied, Range passthrough) |
 | `/vid/d/<raw-url>`               | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`                 | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
@@ -139,7 +139,7 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrang
 | Var            | Purpose |
 | -------------- | ------- |
 | `TIMEZONE`     | Tweet timestamp display timezone |
-| `TRANSLATE_TO` | BCP-47 language for tweet translation; blank = original. `?lang=` on the URL overrides it |
+| `TWITTER_LANG` | BCP-47 language for tweet translation; blank = original. `?lang=` on the URL overrides it |
 | `GITHUB_TOKEN` | Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
 | `UA`           | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 

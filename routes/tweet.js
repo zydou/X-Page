@@ -12,7 +12,7 @@
  *   thread 本推 + 本推的串推后代（剔除祖先推文）
  *
  * 翻译语言（?lang=）：
- *   - 查询参数优先于 TRANSLATE_TO 环境变量；两者都缺省时不翻译
+ *   - 查询参数优先于 TWITTER_LANG 环境变量；两者都缺省时不翻译
  *   - lang 原样透传给 fxtwitter（/2/thread/<id>?lang=<lang>），返回的
  *     translation 字段按该语言给出译文
  *   - R2 key 带语言维度（tweet/<id>.<lang>.json）：不同 lang 的译文不同，
@@ -271,7 +271,7 @@ const LANG_RE = /^[A-Za-z]{2,3}(-[A-Za-z]{2,8})?$/;
  * 解析 ?lang= 查询参数。
  *
  * 只接受 BCP-47 形态的语言标签；缺省或任何非法值返回空串（由调用方
- * 回退到 TRANSLATE_TO 环境变量），不做 400——与 parseMode 同理。
+ * 回退到 TWITTER_LANG 环境变量），不做 400——与 parseMode 同理。
  * 做形状校验是因为 lang 会拼进 R2 key，
  * 不能让它把路径分隔符等字符带进 key。
  *
@@ -621,7 +621,7 @@ function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
  *   - 支持 Accept: text/markdown 协商，返回纯 Markdown（供 Agent / CLI 直接消费）
  *
  * @param {Request} request 原始请求
- * @param {Object} env Worker 环境变量（含 TIMEZONE / TRANSLATE_TO）
+ * @param {Object} env Worker 环境变量（含 TIMEZONE / TWITTER_LANG）
  * @param {string} cleanPath 去首斜杠 + decode 后的路径
  * @param {string} waterCss water.css 源码字符串
  * @param {string} twitterCss twitter.css 源码字符串
@@ -631,8 +631,8 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
   const url = new URL(request.url);
   const refresh = url.searchParams.has("refresh");
   const mode = parseMode(url.searchParams.get("mode"));
-  // ?lang= 优先于 TRANSLATE_TO 环境变量；两者都缺省时不翻译
-  const lang = parseLang(url.searchParams.get("lang")) || (env && env.TRANSLATE_TO) || "";
+  // ?lang= 优先于 TWITTER_LANG 环境变量；两者都缺省时不翻译
+  const lang = parseLang(url.searchParams.get("lang")) || (env && env.TWITTER_LANG) || "";
   // ?refresh_button=0 隐藏页面上的"强制刷新"按钮（缺省仍显示）
   const showRefreshBtn = url.searchParams.get("refresh_button") !== "0";
   // 刷新链接需带上 mode 与 lang，否则点刷新按钮会跳回默认参数
@@ -880,14 +880,14 @@ async function fetchAndCacheThread(apiUrl, r2Key, refresh, env, lang) {
  * 可按 lang 依次预热多个语言（lang 传空则跳过）。
  *
  * @param {string} pid 推文 ID
- * @param {Object} env Worker 环境（含 R2 绑定 TWEETS / TRANSLATE_TO / PREWARM_LANGS）
+ * @param {Object} env Worker 环境（含 R2 绑定 TWEETS / TWITTER_LANG / TWITTER_PREWARM_LANGS）
  * @param {Object} ctx Worker ExecutionContext（用于后台写回 R2）
- * @param {string} [lang] 语言（空则按默认 TRANSLATE_TO；传入具体语言则按该语言）
+ * @param {string} [lang] 语言（空则按默认 TWITTER_LANG；传入具体语言则按该语言）
  * @returns {Promise<{data: Object|null, fallback: boolean}|null>}
  */
 export async function prewarmTweet(pid, env, ctx, lang) {
   if (!pid) return null;
-  const effectiveLang = lang !== undefined ? lang : ((env && env.TRANSLATE_TO) || "");
+  const effectiveLang = lang !== undefined ? lang : ((env && env.TWITTER_LANG) || "");
   const cfg = { lang: effectiveLang };
   // rawPath 只用到 pid 提取，构造一个合法形态即可
   const rawPath = `__prewarm__/status/${pid}`;

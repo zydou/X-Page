@@ -5,7 +5,7 @@ description: 介绍 Telegram 转换机器人的 webhook 安全模型与链接转
 tags: [Telegram, Bot, webhook, 链接转换]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T02:38:52.437Z
+    at: 2026-11-06T03:00:20.989Z
 sources:
   - id: openwiki-source-3dec53bd176af78782129d6d
     resource: repo://lib/bot/matcher.js
@@ -15,7 +15,7 @@ sources:
     resource: repo://lib/bot/telegram.js
   - id: openwiki-source-7ac255018a231eb231733c3f
     resource: repo://routes/webhook.js
-generated: { by: "claude-code", at: "2026-11-06T02:38:52.437Z" }
+generated: { by: "claude-code", at: "2026-11-06T03:00:20.989Z" }
 ---
 
 # Telegram 机器人
@@ -96,7 +96,7 @@ generated: { by: "claude-code", at: "2026-11-06T02:38:52.437Z" }
 `sendMessage()` 之后，文本通道会按 `buildPrewarmTargets(text)` 算出的目标数组逐个内部直调预热（`prewarmCache`，`routes/webhook.js` ），触发真实路由回源并写 R2，让用户点开链接时直接命中缓存。
 
 - 只覆盖会写 R2 的两条路由：X/Twitter → `prewarmTweet(pid, env, ctx, lang)`（内部调 `fetchTweetData`，R2 key 只跟 lang 维度有关，与 mode 无关）；微信公众号 → `prewarmWechat(url, env, ctx)`（复用 `serveHtml` 抓取与改写，最终 HTML 写 R2）。
-- 推文预热按 `PREWARM_LANGS` 分发（`wrangler.toml` 的 `[vars]`，如 `"cn,ja"`）：每种语言各一份 key `tweet/<id>.<lang>.json`。为空则回退 `TRANSLATE_TO`。`serveTweet` 默认渲染仍用 `TRANSLATE_TO`，与预热列表独立。
+- 推文预热按 `TWITTER_PREWARM_LANGS` 分发（`wrangler.toml` 的 `[vars]`，如 `"cn,ja"`）：每种语言各一份 key `tweet/<id>.<lang>.json`。为空则回退 `TWITTER_LANG`。`serveTweet` 默认渲染仍用 `TWITTER_LANG`，与预热列表独立。
 - GitHub、通用媒体 URL 等不落 R2 的平台不做预热，`buildPrewarmTargets` 返回空数组。
 - 为什么内部直调而非 GET 自家域名：`wrangler tail` 实测自 fetch 自定义域名撞 Cloudflare 边缘缓存层 522（`prewarm 失败: HTTP 522`），直接调用 handler 完全走 Worker 内部链路、不经边缘。
 - 失败只记 `console.error("prewarm 失败:", ...)`，不重试也不通知用户；回复已在预热前发完，预热失败完全无感。

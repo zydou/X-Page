@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:c1f960a668c60332b565e3752c9194bbda8d777533ffd7eb15e52a7eae0d9acb",
+  "pageVersion": "sha256:171ae4470fa03fa5a1c03e9353cbaa3f226c73db70181a1b4c2241b0a4beb161",
   "claims": [
     {
       "id": "claim_f51f162b24414602989954d65bc97063",
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     },
@@ -68,7 +68,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     },
@@ -95,6 +95,6 @@
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T02:38:52.437Z"
+    "at": "2026-11-06T03:00:20.989Z"
   }
 }

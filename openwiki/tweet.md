@@ -5,7 +5,7 @@ description: 阐明推文渲染的数据源、翻译与缓存策略，以及自�
 tags: [推文, Twitter, fxtwitter, 翻译, R2缓存]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T02:38:52.437Z
+    at: 2026-11-06T03:00:20.989Z
 sources:
   - id: openwiki-source-51d8dc0d173d42237cb85fda
     resource: repo://lib/thread.js
@@ -39,9 +39,9 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 串推后代用 `descendantsOf()` 从 thread 中按作者与 `replying_to` 计算（`lib/thread.js`）。
 
-### 1.2 翻译：`TRANSLATE_TO` 与 `?lang=`
+### 1.2 翻译：`TWITTER_LANG` 与 `?lang=`
 
-- 查询 `?lang=` 优先于 `TRANSLATE_TO` 环境变量；两者都缺省则不翻译，fxtwitter 返回原文（`routes/tweet.js:635`）。
+- 查询 `?lang=` 优先于 `TWITTER_LANG` 环境变量；两者都缺省则不翻译，fxtwitter 返回原文（`routes/tweet.js:635`）。
 - **R2 key 带语言维度**：`tweet/<id>.<lang>.json`（无翻译时 `tweet/<id>.json`）。不同语言各存一份——`?lang=ja` 不会命中 `?lang=zh-cn` 缓存（`routes/tweet.js:708-711`）。
 - lang 原样透传给 fxtwitter（`/2/thread/<id>?lang=<lang>`），译文由 `translation` 字段返回。
 

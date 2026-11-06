@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:838e5667dbfa3fd33679425e1f50340e07c76045faf1e581f6de3d6ce2f8bdbf",
+  "pageVersion": "sha256:25356796a57c42e414a8cef1089a418bdae32d82593a444f478d6fbf377f994c",
   "claims": [
     {
       "id": "claim_850e2e6810db4a52940f2304cd8eb254",
@@ -8,7 +8,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     },
@@ -34,27 +34,27 @@
     },
     {
       "id": "claim_b036599cba3546febac3725841969b05",
-      "statement": "TIMEZONE 与 TRANSLATE_TO 通过 wrangler vars 配置推文时区与默认翻译语言。",
+      "statement": "TIMEZONE 与 TWITTER_LANG 通过 wrangler vars 配置推文时区与默认翻译语言",
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     },
     {
       "id": "claim_3aeb17cf0b084c398b15942a82bdd9a1",
-      "statement": "PREWARM_LANGS 环境变量（wrangler [vars]）规定 bot 预热时需要缓存的语言列表，如 cn,ja；为空则回退 TRANSLATE_TO",
+      "statement": "TWITTER_PREWARM_LANGS 环境变量（wrangler [vars]）规定 bot 预热时需要缓存的语言列表，如 cn,ja；为空则回退 TWITTER_LANG",
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T02:38:52.437Z"
+    "at": "2026-11-06T03:00:20.989Z"
   }
 }

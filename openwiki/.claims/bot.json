@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:3289d98641fdb03d77f2ba52bd940e6fd632b129e271c7dea53d6702b5a9d285",
+  "pageVersion": "sha256:e0c47ffd767dee578d5a7e7c2e6e2c140ac3a144643b8354b51056ba8a2c8011",
   "claims": [
     {
       "id": "claim_219822b25a2e4d0a9961148356ee3ddf",
@@ -8,7 +8,7 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:5b2822a937b223c62aa00a3982ec7c223218e17049683383525a1cd16e4a990f"
+          "version": "repo-file-v1:sha256:ee8873cf16bcb02fcd6e4f6509cfe058acb12ace6019c2181d358060c98c1073"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:5b2822a937b223c62aa00a3982ec7c223218e17049683383525a1cd16e4a990f"
+          "version": "repo-file-v1:sha256:ee8873cf16bcb02fcd6e4f6509cfe058acb12ace6019c2181d358060c98c1073"
         }
       ]
     },
@@ -68,7 +68,7 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:5b2822a937b223c62aa00a3982ec7c223218e17049683383525a1cd16e4a990f"
+          "version": "repo-file-v1:sha256:ee8873cf16bcb02fcd6e4f6509cfe058acb12ace6019c2181d358060c98c1073"
         }
       ]
     },
@@ -78,17 +78,17 @@
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:5b2822a937b223c62aa00a3982ec7c223218e17049683383525a1cd16e4a990f"
+          "version": "repo-file-v1:sha256:ee8873cf16bcb02fcd6e4f6509cfe058acb12ace6019c2181d358060c98c1073"
         }
       ]
     },
     {
       "id": "claim_3eba36b921f8417797c25b7c528a9bd0",
-      "statement": "回复后会预热真实页面写 R2：推文按 PREWARM_LANGS 逐语言调 prewarmTweet、微信调 prewarmWechat 内部直调写 R2，其它平台不预热",
+      "statement": "回复后会预热真实页面写 R2：推文按 TWITTER_PREWARM_LANGS 逐语言调 prewarmTweet、微信调 prewarmWechat 内部直调写 R2，其它平台不预热",
       "evidence": [
         {
           "resource": "repo://routes/webhook.js",
-          "version": "repo-file-v1:sha256:5b2822a937b223c62aa00a3982ec7c223218e17049683383525a1cd16e4a990f"
+          "version": "repo-file-v1:sha256:ee8873cf16bcb02fcd6e4f6509cfe058acb12ace6019c2181d358060c98c1073"
         }
       ]
     },
@@ -105,6 +105,6 @@
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T02:38:52.437Z"
+    "at": "2026-11-06T03:00:20.989Z"
   }
 }

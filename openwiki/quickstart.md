@@ -5,7 +5,7 @@ description: 为新读者提供 x-page 的概览、服务目录与本地开发�
 tags: [快速上手, 概览, 开发, 部署]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T02:38:52.437Z
+    at: 2026-11-06T03:00:20.989Z
 sources:
   - id: openwiki-source-8a2e26d4137b8250f68bb869
     resource: repo://build.sh
@@ -13,7 +13,7 @@ sources:
     resource: repo://worker.js
   - id: openwiki-source-8f4419482b64e334cd5f4bb6
     resource: repo://wrangler.toml
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-06T03:00:20.989Z" }
 ---
 
 # 快速上手
@@ -94,7 +94,8 @@ push 到 `worker.js`、`routes/**`、`lib/**`、`twitter.css`、`wrangler.toml`�
 | R2 `TWEETS`（桶 `x-page` / dev `x-page-dev`） | `tweet/`、`wechat/`、`md/` 三个前缀共用；`tweet/` 365 天 lifecycle 过期 |
 | Workers AI `env.AI` | `/html/` 与 `/wechat/` 的 Markdown 转换，0 Neuron |
 | `TIMEZONE = "Asia/Shanghai"` | 推文时间戳显示时区 |
-| `TRANSLATE_TO = "cn"` | 推文默认翻译语言；`?lang=` 覆盖 |
+| `TWITTER_LANG = "cn"` | 推文默认翻译语言；`?lang=` 覆盖 |
+| `TWITTER_PREWARM_LANGS = "cn,ja"` | Telegram bot 推文预热语言列表（逗号分隔），每条链接各写一份 `tweet/<id>.<lang>.json`；为空回退 `TWITTER_LANG` |
 | `UA` | `/html/` 抓取默认 iOS 微信 UA，可覆盖 |
 | `GITHUB_TOKEN`（Secret） | `/github/` 的 GitHub API 限流提升 |
 

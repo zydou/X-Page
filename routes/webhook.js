@@ -55,9 +55,9 @@ const HELP = `X-Page 转换机器人
  * @param {object} ctx Worker ExecutionContext（透传给 handler 做后台写回）
  */
 async function prewarmCache(targets, env, ctx) {
-  // 推文预热按 PREWARM_LANGS 分发：默认回退 TRANSLATE_TO；配置为 "cn,ja" 即两份都写。
-  const prewarmLangs = String((env && env.PREWARM_LANGS) || "").split(",").map((s) => s.trim()).filter(Boolean);
-  const effectiveLangs = prewarmLangs.length ? prewarmLangs : [undefined]; // undefined → prewarmTweet 走 TRANSLATE_TO
+  // 推文预热按 TWITTER_PREWARM_LANGS 分发：默认回退 TWITTER_LANG；配置为 "cn,ja" 即两份都写。
+  const prewarmLangs = String((env && env.TWITTER_PREWARM_LANGS) || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const effectiveLangs = prewarmLangs.length ? prewarmLangs : [undefined]; // undefined → prewarmTweet 走 TWITTER_LANG
   for (const t of targets) {
     try {
       const r = t.kind === "tweet"

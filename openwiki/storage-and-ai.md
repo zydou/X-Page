@@ -5,13 +5,13 @@ description: 梳理持久化层 R2 缓存策略与 Workers AI 绑定，以及环
 tags: [R2, 存储, Workers AI, 配置]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T02:38:52.437Z
+    at: 2026-11-06T03:00:20.989Z
 sources:
   - id: openwiki-source-529e9dc3a2b5d10c27b03b93
     resource: repo://lib/to-markdown.js
   - id: openwiki-source-8f4419482b64e334cd5f4bb6
     resource: repo://wrangler.toml
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-06T03:00:20.989Z" }
 ---
 
 # 存储与 AI 绑定
@@ -32,7 +32,7 @@ x-page 的几乎所有持久化都过 R2 桶 `x-page`（绑定 `TWEETS`）。AI 
 | 前缀 | 存什么 | 生命周期 |
 |---|---|---|
 | `tweet/<id>.json` | 未翻译的 fxtwitter thread JSON | 365 天过期（`expire-tweets-after-1y` lifecycle） |
-| `tweet/<id>.<lang>.json` | 带翻译的 thread JSON（`?lang=` 或 `TRANSLATE_TO`） | 同上，按语言一份 |
+| `tweet/<id>.<lang>.json` | 带翻译的 thread JSON（`?lang=` 或 `TWITTER_LANG`） | 同上，按语言一份 |
 | `wechat/<原文URL>` | 渲染好的完整 HTML | **永久保留**（防失效优先，无过期规则） |
 | `md/<route>/<target>` | `/html/` 与 `/wechat/` 的 Markdown 变体 | **永久保留**，同一 URL 一生只转一次 |
 
@@ -54,7 +54,8 @@ AI 绑定的使用仅限一条路径；Markdown 转换结果必须先落 R2、�
 | Var | 用途 |
 |---|---|
 | `TIMEZONE = "Asia/Shanghai"` | 推文时间戳显示时区 |
-| `TRANSLATE_TO = "cn"` | 推文翻译目标语言，`?lang=` 覆盖 |
+| `TWITTER_LANG = "cn"` | 推文翻译目标语言，`?lang=` 覆盖 |
+| `TWITTER_PREWARM_LANGS = "cn,ja"` | Telegram bot 推文预热语言列表（逗号分隔 BCP-47），每种语言各写一份 `tweet/<id>.<lang>.json`。为空则回退 `TWITTER_LANG`。仅影响 bot 预热，`serveTweet` 默认渲染仍用 `TWITTER_LANG` |
 | `UA` | `/html/` 抓取的 User-Agent，默认 iOS 微信 UA |
 | `GITHUB_TOKEN` | Worker Secret（`wrangler secret put`），`/github/` 的 GitHub API 限流提升（60/h → 5000/h） |
 

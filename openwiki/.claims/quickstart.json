@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:d3ed0a19e4d5090aafa2d45f61f0b705910c80b7935b19e7397f3c139b99d0b6",
+  "pageVersion": "sha256:c3030655ece8082ce09456a69c853754bc17bd76cb6981a8b8842ad43139cd75",
   "claims": [
     {
       "id": "claim_d80fdd7959ea4571a966a79ad0050944",
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     },
@@ -38,23 +38,23 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     },
     {
       "id": "claim_2159c3a6f4cf489c814dededa251450a",
-      "statement": "PREWARM_LANGS 规定 bot 预热语言列表（wrangler [vars]），如 cn,ja；为空回退 TRANSLATE_TO",
+      "statement": "TWITTER_PREWARM_LANGS 规定 bot 预热语言列表（wrangler [vars]），如 cn,ja；为空回退 TWITTER_LANG",
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:4932ce8159430227de36d76bf54fd0800fe2f32f428e2c288b90d10d34550fe2"
+          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T02:38:52.437Z"
+    "at": "2026-11-06T03:00:20.989Z"
   }
 }

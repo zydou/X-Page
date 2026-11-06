@@ -5,7 +5,7 @@ description: 自包含 HTML 的内联资产策略、构建脚本与 CI 部署流
 tags: [构建部署, 内联资产, CI, Cloudflare Workers]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T02:38:52.437Z
+    at: 2026-11-06T03:00:20.989Z
 sources:
   - id: openwiki-source-d8b6488c252ba22fd6c0f6dc
     resource: repo://.github/workflows/deploy.yaml

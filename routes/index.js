@@ -25,7 +25,7 @@ export function indexHtml(host) {
 <ul>
 <li>支持推文、Thread、Article；自动展开链接</li>
 <li>内置媒体代理，无需外部代理即可在受限地区访问推内图片/视频</li>
-<li>可用 <code>?lang=ja</code> 指定翻译语言，覆盖 <code>TRANSLATE_TO</code> 环境变量</li>
+<li>可用 <code>?lang=ja</code> 指定翻译语言，覆盖 <code>TWITTER_LANG</code> 环境变量</li>
 </ul>
 <p>格式：https://${host}/&lt;username&gt;/status/&lt;tweet_id&gt;</p>
 <p>翻译：<code>https://${host}/&lt;username&gt;/status/&lt;tweet_id&gt;?lang=ja</code></p>

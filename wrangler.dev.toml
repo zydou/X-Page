@@ -33,9 +33,9 @@ command = "sh build.sh"
 
 [vars]
 TIMEZONE = "Asia/Shanghai"
-TRANSLATE_TO = "cn"
-PREWARM_LANGS = "cn,ja"
-# Webhook 预热语言列表：与 prod 一致。仅用于 bot 预热，serveTweet 默认渲染仍用 TRANSLATE_TO。
+TWITTER_LANG = "cn"
+TWITTER_PREWARM_LANGS = "cn,ja"
+# Webhook 预热语言列表：与 prod 一致。仅用于 bot 预热，serveTweet 默认渲染仍用 TWITTER_LANG。
 # User-Agent 覆盖：/html/ 路由抓取时的 UA。
 # 默认使用 iOS 微信内置浏览器 UA，用于绕过微信公众号白名单。
 UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 26_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.73(0x18004939) NetType/WIFI Language/zh_CN"

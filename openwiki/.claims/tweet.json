@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:304e8ab51299e1e71d81c28407d2b218ceeaae3eead819e137e679024a975f22",
+  "pageVersion": "sha256:9a9f260f42f21d31ff3ae2e9c390b2f1bc8336fdd951d9b32c3b715b81205275",
   "claims": [
     {
       "id": "claim_5e3faac959e74ae19f00cc86252f7a6b",
@@ -8,17 +8,17 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
+          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
         }
       ]
     },
     {
       "id": "claim_534769fc071e490dbf6ac8dd8d305fa8",
-      "statement": "翻译语言由 ?lang= 优先于 TRANSLATE_TO 环境变量决定，译文由 fxtwitter 的 translation 字段提供。",
+      "statement": "翻译语言由 ?lang= 优先于 TWITTER_LANG 环境变量决定，译文由 fxtwitter 的 translation 字段提供",
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
+          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
         }
       ]
     },
@@ -28,7 +28,7 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
+          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
         }
       ]
     },
@@ -64,17 +64,17 @@
     },
     {
       "id": "claim_e79ad653ee1540e199de451710163374",
-      "statement": "prewarmTweet 是内部直调预热入口：用传入的 lang（或 TRANSLATE_TO）调 fetchTweetData，通过后台 write 回写 R2，不做渲染",
+      "statement": "prewarmTweet 是内部直调预热入口：用传入的 lang（或 TWITTER_LANG）调 fetchTweetData，通过后台 write 回写 R2，不做渲染",
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
+          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T02:38:52.437Z"
+    "at": "2026-11-06T03:00:20.989Z"
   }
 }
