@@ -40,15 +40,14 @@ export function isDirectVideo(cleanPath) {
  *   2. 空 URL → 返回使用说明页
  *   3. 校验 URL 必须 http(s) 开头（或编码后等价形态）
  *   4. 决定播放源：代理模式 → /proxy/<encoded>；直连模式 → 原始 URL
- *   5. 把 artplayer 源码直接内联到 HTML <script> 中，做到自包含
+ *   5. 通过 /assets/artplayer.js 外置加载播放器库（飞书多 iframe 只下载一次）
  *
  * @param {Request} request 原始请求
  * @param {string} cleanPath 去首斜杠 + decode 后的路径
  * @param {string} host 请求的 Host 头（用于使用说明页生成示例链接）
- * @param {string} artplayerJs 由 worker.js 注入的 Artplayer 库源码字符串
  * @returns {Response} Artplayer 播放器 HTML 或错误提示
  */
-export async function serveVideo(_request, cleanPath, host, artplayerJs) {
+export async function serveVideo(_request, cleanPath, host) {
   const isDirect = isDirectVideo(cleanPath);
 
   // 根据模式决定截取前缀的长度，拿掉 "vid/" 或 "vid/d/"
@@ -85,7 +84,7 @@ export async function serveVideo(_request, cleanPath, host, artplayerJs) {
     playerUrl = proxyUrl(rawUrl);
   }
 
-  // HTML 完全自包含：Artplayer 源码直接内联在 <script> 里
+  // Artplayer 源码外置 /assets/artplayer.js，飞书多 iframe 只下载一次
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -96,8 +95,8 @@ export async function serveVideo(_request, cleanPath, host, artplayerJs) {
 </head>
 <body>
 <div class="artplayer"></div>
+<script src="/assets/artplayer.js" defer></script>
 <script>
-${artplayerJs}
 Artplayer.ASPECT_RATIO = ["default", "1:1", "3:4", "4:3", "9:16", "16:9"];
 Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const art = new Artplayer(

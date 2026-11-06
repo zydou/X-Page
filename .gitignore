@@ -8,7 +8,6 @@ md/
 !lib/
 # Generated assets —— 由 wrangler.toml [build] 的 build.sh 在部署前从 CDN 下载并构建。
 # 提交到仓库无意义（每次部署都会重新生成），仅用于本地开发时让 wrangler dev 能找到文件。
-water.css
 artplayer.js
 artplayer.mjs
 highlight.mjs

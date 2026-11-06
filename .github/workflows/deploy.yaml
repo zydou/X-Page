@@ -9,7 +9,7 @@ on:
       - worker.js
       - routes/**
       - lib/**
-      - twitter.css
+      - assets/**
       - wrangler.toml
       - build.sh
 

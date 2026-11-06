@@ -1,0 +1,130 @@
+:root{--background-body:#fff;--background:#efefef;--background-alt:#f7f7f7;--selection:#9e9e9e;--text-main:#363636;--text-bright:#000;--text-muted:#70777f;--links:#0076d1;--focus:rgba(0,150,191,.67);--border:#dbdbdb;--code:#000;--animation-duration:.1s;--button-base:#d0cfcf;--button-hover:#9b9b9b;--scrollbar-thumb:#aaa;--scrollbar-thumb-hover:var(--button-hover);--form-placeholder:#949494;--form-text:#1d1d1d;--variable:#39a33c;--highlight:#ff0;--select-arrow:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' height='63' width='117' fill='%23161f27'%3E%3Cpath d='M115 2c-1-2-4-2-5 0L59 53 7 2a4 4 0 00-5 5l54 54 2 2 3-2 54-54c2-1 2-4 0-5z'/%3E%3C/svg%3E")}@media(prefers-color-scheme:dark){:root{--background-body:#202b38;--background:#161f27;--background-alt:#1a242f;--selection:#1c76c5;--text-main:#dbdbdb;--text-bright:#fff;--text-muted:#a9b1ba;--links:#41adff;--focus:rgba(0,150,191,.67);--border:#526980;--code:#ffbe85;--animation-duration:.1s;--button-base:#0c151c;--button-hover:#040a0f;--scrollbar-thumb:var(--button-hover);--scrollbar-thumb-hover:#000;--form-placeholder:#a9a9a9;--form-text:#fff;--variable:#d941e2;--highlight:#efdb43;--select-arrow:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' height='63' width='117' fill='%23efefef'%3E%3Cpath d='M115 2c-1-2-4-2-5 0L59 53 7 2a4 4 0 00-5 5l54 54 2 2 3-2 54-54c2-1 2-4 0-5z'/%3E%3C/svg%3E")}}html{scrollbar-color:#aaa #fff;scrollbar-color:var(--scrollbar-thumb) var(--background-body);scrollbar-width:thin}@media(prefers-color-scheme:dark){html{scrollbar-color:#040a0f #202b38;scrollbar-color:var(--scrollbar-thumb) var(--background-body)}}body{font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,Segoe UI Emoji,Apple Color Emoji,Noto Color Emoji,sans-serif;line-height:1.4;max-width:800px;margin:20px auto;padding:0 10px;word-wrap:break-word;color:#363636;color:var(--text-main);background:#fff;background:var(--background-body);text-rendering:optimizeLegibility}@media(prefers-color-scheme:dark){body{background:#202b38;background:var(--background-body);color:#dbdbdb;color:var(--text-main)}}h1{font-size:2.2em;margin-top:0}h1,h2,h3,h4,h5,h6{margin-bottom:12px;margin-top:24px}h1{color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){h1{color:#fff;color:var(--text-bright)}}h2{color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){h2{color:#fff;color:var(--text-bright)}}h3{color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){h3{color:#fff;color:var(--text-bright)}}h4{color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){h4{color:#fff;color:var(--text-bright)}}h5{color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){h5{color:#fff;color:var(--text-bright)}}h6{color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){h6{color:#fff;color:var(--text-bright)}}strong{color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){strong{color:#fff;color:var(--text-bright)}}b,h1,h2,h3,h4,h5,h6,strong,th{font-weight:600}q:after,q:before{content:none}blockquote{border-left:4px solid rgba(0,150,191,.67);border-left:4px solid var(--focus);margin:1.5em 0;padding:.5em 1em;font-style:italic}@media(prefers-color-scheme:dark){blockquote{border-left:4px solid rgba(0,150,191,.67);border-left:4px solid var(--focus)}}q{border-left:4px solid rgba(0,150,191,.67);border-left:4px solid var(--focus);margin:1.5em 0;padding:.5em 1em;font-style:italic}@media(prefers-color-scheme:dark){q{border-left:4px solid rgba(0,150,191,.67);border-left:4px solid var(--focus)}}blockquote>footer{font-style:normal;border:0}address,blockquote cite{font-style:normal}a>code,a>strong{color:inherit}a{text-decoration:none;color:#0076d1;color:var(--links)}@media(prefers-color-scheme:dark){a{color:#41adff;color:var(--links)}}a:hover{text-decoration:underline}code{background:#efefef;background:var(--background);color:#000;color:var(--code);padding:2.5px 5px;border-radius:6px;font-size:1em}@media(prefers-color-scheme:dark){code{color:#ffbe85;color:var(--code);background:#161f27;background:var(--background)}}pre>code{padding:10px;display:block;overflow-x:auto}img,video{max-width:100%;height:auto}hr{border:none;border-top:1px solid #dbdbdb;border-top:1px solid var(--border)}@media(prefers-color-scheme:dark){hr{border-top:1px solid #526980;border-top:1px solid var(--border)}}table{border-collapse:collapse;margin-bottom:10px;width:100%;table-layout:fixed}table caption,td,th{text-align:left}td,th{padding:6px;vertical-align:top;word-wrap:break-word}thead{border-bottom:1px solid #dbdbdb;border-bottom:1px solid var(--border)}@media(prefers-color-scheme:dark){thead{border-bottom:1px solid #526980;border-bottom:1px solid var(--border)}}tfoot{border-top:1px solid #dbdbdb;border-top:1px solid var(--border)}@media(prefers-color-scheme:dark){tfoot{border-top:1px solid #526980;border-top:1px solid var(--border)}}tbody tr:nth-child(2n){background-color:#efefef;background-color:var(--background)}@media(prefers-color-scheme:dark){tbody tr:nth-child(2n){background-color:#161f27;background-color:var(--background)}}::-webkit-scrollbar{height:10px;width:10px}::-webkit-scrollbar-track{background:#efefef;background:var(--background);border-radius:6px}@media(prefers-color-scheme:dark){::-webkit-scrollbar-track{background:#161f27;background:var(--background)}}::-webkit-scrollbar-thumb{background:#aaa;background:var(--scrollbar-thumb);border-radius:6px}@media(prefers-color-scheme:dark){::-webkit-scrollbar-thumb{background:#040a0f;background:var(--scrollbar-thumb)}}::-webkit-scrollbar-thumb:hover{background:#9b9b9b;background:var(--scrollbar-thumb-hover)}@media(prefers-color-scheme:dark){::-webkit-scrollbar-thumb:hover{background:#000;background:var(--scrollbar-thumb-hover)}}::selection{background-color:#9e9e9e;background-color:var(--selection);color:#000;color:var(--text-bright)}@media(prefers-color-scheme:dark){::-moz-selection{color:#fff;color:var(--text-bright)}::selection{color:#fff;color:var(--text-bright)}}@media(prefers-color-scheme:dark){::-moz-selection{background-color:#1c76c5;background-color:var(--selection)}::selection{background-color:#1c76c5;background-color:var(--selection)}}details[open]{padding:10px}details[open] summary{margin-bottom:10px}body>footer{margin-top:40px}/* 推文头部容器，使用 Flexbox 实现左右布局 */
+.tweet-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+/* 头像样式：固定大小、圆形、右侧留白 */
+.tweet-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    margin-right: 12px;
+    object-fit: cover;
+}
+
+/* 右侧信息容器：使用垂直 Flexbox 实现上下两行 */
+.tweet-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.4;
+}
+
+/* 作者名字样式 */
+.tweet-author {
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+/* 时间戳样式 */
+.tweet-time, .tweet-time a {
+    font-size: 0.9em;
+    color: #777;
+    text-decoration: none;
+}
+
+/* 刷新按钮：靠右对齐的图标按钮 */
+.tweet-header .refresh-btn {
+    margin-left: auto;
+    color: #999;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    padding: 6px;
+    border-radius: 50%;
+    transition: color 0.2s, background-color 0.2s, transform 0.3s;
+    flex-shrink: 0;
+}
+
+.tweet-header .refresh-btn:hover {
+    color: #555;
+    background-color: rgba(0,0,0,0.05);
+    transform: rotate(180deg);
+}
+
+.tweet-header .refresh-btn svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+    .tweet-header .refresh-btn:hover {
+        background-color: rgba(255,255,255,0.1);
+    }
+}
+
+/*
+ * 只保留第一条推文的强制刷新按钮，其余推文隐藏。
+ *
+ * 每条推文的头部都是 body 的直接子元素（引用推文同层、主推文之间用 <hr>
+ * 分隔），无 .tweet 容器类。通用兄弟选择器 .tweet-header ~ .tweet-header
+ * 选中第二条及以后的所有头部——既覆盖第一条推文的引用推文，也覆盖
+ * thread/all 模式的后继推文，仅第一条推文的按钮保留显示。
+ */
+.tweet-header ~ .tweet-header .refresh-btn {
+    display: none;
+}
+
+/* 媒体容器：使用 Grid 实现最多两列布局 */
+.media-gallery {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+/* 媒体内容样式 */
+.tweet-media {
+    width: 100%;
+    height: 80vh;
+    object-fit: contain;
+    background-color: #f8f9fa;
+    border-radius: 12px;
+    display: block;
+}
+
+/* 如果媒体被 a 标签包裹，确保 a 标签作为网格项能占满空间 */
+.media-gallery > a {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* 单图/单视频的结构处理：让网格内唯一的直接子元素跨越两列 */
+.media-gallery > *:only-child {
+    grid-column: span 2;
+}
+
+/* 横屏媒体（宽>高）独占一行跨越两列，竖屏/正方形并排显示 */
+.media-gallery > .landscape {
+    grid-column: span 2;
+}
+
+/* 针对单图/单视频重置高度和背景色 */
+.media-gallery > *:only-child .tweet-media,
+.media-gallery > .tweet-media:only-child {
+    height: auto;
+    max-height: 80vh;
+    background-color: transparent;
+}
+
+/* 横屏媒体按原始比例显示，去掉上下边框 */
+.media-gallery > .landscape .tweet-media,
+.media-gallery > .landscape.tweet-media {
+    height: auto;
+    max-height: 80vh;
+    background-color: transparent;
+}

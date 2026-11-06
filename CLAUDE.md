@@ -111,28 +111,36 @@ trimming would change the route's faithful-rendering behaviour. This is why `ser
 hook takes an `isMarkdown` flag.
 
 
-## Inlined Assets (Text Module Rules)
+## Externalized Assets (`/assets/` routes)
 
-All rendered HTML is fully self-contained — no external `<link>` or `<script>` tags.
-Three assets are inlined into HTML, each through a different mechanism:
+Browser-served CSS/JS are external (not inlined) so that a Feishu doc with
+dozens of iframes shares one copy via browser HTTP cache. Worker imports them
+via the `Text` module rule and serves at `/assets/<name>` with
+`Cache-Control: public, max-age=31556952, immutable`.
 
-| Asset           | Source                                      | Mechanism                   | In worker.js |
-| --------------- | ------------------------------------------- | --------------------------- | ------------ |
-| `water.css`     | CDN (jsdelivr)                              | `Text` module rule → string | `import WATER_CSS from "./water.css"` |
-| `twitter.css`   | Repo file                                   | `Text` module rule → string | `import TWITTER_CSS from "./twitter.css"` |
-| `artplayer.mjs` | CI-generated from `artplayer.js` (jsdelivr) | ESM default-exported string | `import ARTPLAYER_JS from "./artplayer.mjs"` |
+| Asset             | Source                                  | Served at                | Used by routes |
+| ----------------- | --------------------------------------- | ------------------------ | -------------- |
+| `assets/twitter.css` | repo (trimmed water.css subset + twitter rules) | `/assets/twitter.css` | tweet        |
+| `assets/github.css`  | repo (trimmed water.css subset + hljs theme + `.gh-*`) | `/assets/github.css`  | github       |
+| `artplayer.mjs`   | CI-generated from `artplayer.js` (jsdelivr) | `/assets/artplayer.js` | video       |
 
-The CSS assets are minified by `esbuild`; the Artplayer JS avoids esbuild
-(its minified source contains backticks/`${` that would break template literals) and instead is wrapped by CI as `export default "<JSON-escaped source>"`.
+The trimmed "water" subset in `assets/*.css` keeps only the box model +
+typography rules actually emitted by the routes (`:root` vars, `h1-h6/p/a/ul/li/
+blockquote/table/pre/code/hr/img/video/strong`, scrollbars); all form controls
+(`button/input/select/textarea`), `details/summary/dialog`, `label/fieldset`,
+`@media print`, and `mailto:/sms:/tel:` decoration are removed.
 
-None of these files are committed; CI fetches and transforms them before deploy.
+`artplayer.mjs` is built as an ESM default-exported string (`export default "<JSON-escaped source>"`)
+to avoid backticks/`${` breaking template literals. `markdown-it.mjs` and
+`highlight.mjs` remain Worker-side only (SSR rendering) and are not served to
+the browser.
 
 ### CI Pipeline (`.github/workflows/deploy.yaml`)
 
-1. `npx wrangler deploy` — Wrangler runs the `[build]` command (`sh build.sh`) first, which downloads and builds all remote assets (CSS, artplayer, markdown-it, highlight.js), then deploys.
+1. `npx wrangler deploy` — Wrangler runs the `[build]` command (`sh build.sh`) first, which downloads and builds all remote assets (markdown-it, highlight.js), then deploys. `assets/*.css` are committed to the repo and not rebuilt.
 2. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
 
-Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `twitter.css`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
+Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `assets/**`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
 
 ## Vars
 
@@ -157,7 +165,7 @@ route (`routes/webhook.js`). See `README.md` → Telegram 转换 Bot.
 ### Local Development
 
 ```bash
-# Download & build all remote assets (CSS, JS), then start dev server
+# Build remote assets (JS only), then start dev server
 sh build.sh
 npx wrangler dev
 ```

@@ -366,13 +366,11 @@ function renderPost(post, opt) {
  * @param {Object|null} data fxtwitter thread 对象（fetchTweetData 返回值）
  * @param {{tz: string}} cfg 时区配置
  * @param {"all"|"self"|"quote"|"thread"} mode 解析模式（见文件头）
- * @param {string} waterCss water.css 源码字符串
- * @param {string} twitterCss twitter.css 源码字符串
  * @param {string} rawPath 原始路径（含 username/status/ 前缀），供缺 url 的推文做回退链接
  * @param {string} [refreshUrl] 刷新按钮的链接 URL
  * @returns {string} 完整 HTML 文档
  */
-function renderHtml(data, cfg, mode, waterCss, twitterCss, rawPath, refreshUrl) {
+function renderHtml(data, cfg, mode, rawPath, refreshUrl) {
   const { tz } = cfg;
   const pid = extractPid(rawPath);
 
@@ -405,34 +403,28 @@ function renderHtml(data, cfg, mode, waterCss, twitterCss, rawPath, refreshUrl) 
 
   // 清理空段落
   fullHtml = fullHtml.trim().replace(/<p><\/p>/g, "");
-  return wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss);
+  return wrapHtml(fullHtml, thisAuthor);
 }
 
 /**
- * 用公共 <head>（water.css + twitter.css）包裹 thread HTML，组装完整页面。
+ * 用公共 <head> 包裹 thread HTML，组装完整页面。
  *
- * 自包含策略：
- *   - 不输出任何外部 <link>/<script> 标签
- *   - 所有 CSS 通过 Text module rule 在本文件导入后注入 <style>
- *   - og:site_name 指示社交平台预览时的站点名
+ * CSS 策略：外置 /assets/twitter.css（裁剪后 water 子集 + twitter 专属样式），
+ * 飞书文档内多个推文 iframe 共享一份浏览器缓存。
+ * og:site_name 指示社交平台预览时的站点名
  *
  * @param {string} fullHtml thread 正文 HTML
  * @param {string} thisAuthor 顶层作者的显示名（供 og:site_name 用）
- * @param {string} waterCss water.css 源码字符串
- * @param {string} twitterCss twitterCss 源码字符串
- * @returns {string} 完整自包含的 HTML 文档
+ * @returns {string} 完整 HTML 文档
  */
-export function wrapHtml(fullHtml, thisAuthor, waterCss, twitterCss) {
+export function wrapHtml(fullHtml, thisAuthor) {
   return `<!DOCTYPE html>
 <html>
 <head>
     <meta property="og:site_name" content="X | ${thisAuthor}" />
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <style>
-    ${waterCss}
-    ${twitterCss}
-    </style>
+    <link rel="stylesheet" href="/assets/twitter.css">
 </head>
 <body>${fullHtml}</body>
 </html>`;
@@ -623,11 +615,9 @@ function renderMarkdown(data, cfg, mode, refreshUrl, pid) {
  * @param {Request} request 原始请求
  * @param {Object} env Worker 环境变量（含 TIMEZONE / TWITTER_LANG）
  * @param {string} cleanPath 去首斜杠 + decode 后的路径
- * @param {string} waterCss water.css 源码字符串
- * @param {string} twitterCss twitter.css 源码字符串
  * @returns {Response} 推文 HTML 或 Markdown，或错误页面（400/404/502）
  */
-export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, ctx) {
+export async function serveTweet(request, env, cleanPath, ctx) {
   const url = new URL(request.url);
   const refresh = url.searchParams.has("refresh");
   const mode = parseMode(url.searchParams.get("mode"));
@@ -677,7 +667,7 @@ export async function serveTweet(request, env, cleanPath, waterCss, twitterCss, 
 
     // 默认 HTML 模式
     if (!data) return new Response("Invalid tweet URL", { status: 400 });
-    const html = renderHtml(data, cfg, mode, waterCss, twitterCss, cleanPath, refreshUrl);
+    const html = renderHtml(data, cfg, mode, cleanPath, refreshUrl);
 
     // no-store：R2 是唯一真相源，边缘副本在本账号 purge 不掉，「省一次 Worker
     // 调用」换「写坏一次永久错」不划算（完整理由见 lib/to-markdown.js）。

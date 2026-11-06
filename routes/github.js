@@ -448,9 +448,8 @@ function renderTopbar(owner, repo, ref, filePath, meta) {
 /**
  * 把 README 文档的 HTML 片断包裹为完整的、自包含的页面。
  *
- * 复用了原来的 .gh-topbar 布局；正文用 water.css 兜底排版；代码块 /
- * 表格 / 图片约束在容器宽度内。注入 highlight.js 主题 CSS（github +
- * github-dark，dark 用 @media (prefers-color-scheme: dark) 包裹）。
+ * CSS 策略：外置 /assets/github.css（裁剪后 water 子集 + .gh-* + hljs 主题），
+ * 飞书文档内多个仓库 iframe 共享一份浏览器缓存。
  *
  * @param {string} readmeHtml 已改写资源路径的 README body
  * @param {string} owner
@@ -458,11 +457,9 @@ function renderTopbar(owner, repo, ref, filePath, meta) {
  * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath 文件路径（空串 = 默认 README）
  * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
- * @param {string} waterCss water.css 源码字符串
- * @param {string} themeCss highlight.js 主题 CSS（含 dark @media）
  * @returns {string} 完整 HTML 文档
  */
-function wrapDocPage(readmeHtml, owner, repo, ref, filePath, meta, waterCss, themeCss) {
+function wrapDocPage(readmeHtml, owner, repo, ref, filePath, meta) {
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
   const safePath = escapeHtml(filePath);
@@ -473,38 +470,7 @@ function wrapDocPage(readmeHtml, owner, repo, ref, filePath, meta, waterCss, the
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${safeOwner}/${safeRepo}${titleSuffix}</title>
-    <style>
-    ${waterCss}
-    /* gh-header 布局（仿照 twitter.css 的 .gh-header，内联以便独立修改） */
-    .gh-header { display:flex; align-items:center; margin-bottom:12px; }
-    .gh-avatar { width:36px; height:36px; border-radius:50%; margin-right:12px; object-fit:cover; }
-    .gh-info { display:flex; flex-direction:column; justify-content:center; line-height:1.4; }
-    /* GitHub README 预览的轻量补充样式（仅布局兜底，不抢 water 的风头） */
-    body { max-width: 980px; }
-    /* header：左右两栏，左侧仿 tweet，右侧统计 */
-    .gh-topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 16px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; }
-    .gh-topbar .gh-header { margin-bottom:0; border-bottom:none; padding:0; }
-    .gh-avatar-ph { background: var(--background-alt); }
-    /* 仓库路径：owner/repo 用tweet-author 蓝色，分隔符改用-muted */
-    .gh-repo-path { font-size:1.1em; font-weight:bold; }
-    .gh-repo-path a { color: var(--links); text-decoration:none; }
-    .gh-repo-path .gh-sep { color: var(--text-muted); font-weight:400; margin:0 4px; }
-    /* 右侧统计：Watch / Star / Fork，仿 GitHub 原生胶囊造型 */
-    .gh-stats { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-    .gh-stat { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85em; color:var(--text-main); text-decoration:none; background:var(--background-alt); white-space:nowrap; }
-    .gh-stat:hover { text-decoration:none; background:var(--background); }
-    .gh-stat .gh-stat-count { font-weight:700; }
-    .gh-stat .gh-stat-icon { font-size:0.95em; }
-    /* GitHub 预渲染 README 的容器与媒体约束 */
-    .markdown-body, #readme { word-wrap: break-word; overflow-wrap: anywhere; }
-    .markdown-body a.anchor, #readme a.anchor { display: none; }
-    .markdown-body img, #readme img { max-width: 100%; height: auto; box-sizing: border-box; }
-    .markdown-body video, #readme video { max-width: 100%; }
-    .markdown-body pre, #readme pre { overflow-x: auto; }
-    .markdown-body table, #readme table { max-width: 100%; display: block; overflow-x: auto; }
-    /* highlight.js 主题（hljs-*）：代码块着色，light + dark 自动切换 */
-    ${themeCss}
-    </style>
+    <link rel="stylesheet" href="/assets/github.css">
 </head>
 <body>
     ${renderTopbar(owner, repo, ref, filePath, meta)}
@@ -530,11 +496,9 @@ function wrapDocPage(readmeHtml, owner, repo, ref, filePath, meta, waterCss, the
  * @param {string} ref 分支/tag/commit SHA
  * @param {string} filePath
  * @param {string} meta
- * @param {string} waterCss
- * @param {string} themeCss github + github-dark 主题（dark 已用 @media 包裹）
  * @returns {string} 完整 HTML 文档
  */
-function wrapCodePage(colored, language, plain, owner, repo, ref, filePath, meta, waterCss, themeCss) {
+function wrapCodePage(colored, language, plain, owner, repo, ref, filePath, meta) {
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
   const safePath = escapeHtml(filePath);
@@ -547,30 +511,7 @@ function wrapCodePage(colored, language, plain, owner, repo, ref, filePath, meta
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${safeOwner}/${safeRepo} · ${safePath}</title>
-    <style>
-    ${waterCss}
-    .gh-header { display:flex; align-items:center; margin-bottom:12px; }
-    .gh-avatar { width:36px; height:36px; border-radius:50%; margin-right:12px; object-fit:cover; }
-    .gh-info { display:flex; flex-direction:column; justify-content:center; line-height:1.4; }
-    body { max-width: 980px; }
-    .gh-topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 16px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; }
-    .gh-topbar .gh-header { margin-bottom:0; border-bottom:none; padding:0; }
-    .gh-avatar-ph { background: var(--background-alt); }
-    .gh-repo-path { font-size:1.1em; font-weight:bold; }
-    .gh-repo-path a { color: var(--links); text-decoration:none; }
-    .gh-repo-path .gh-sep { color: var(--text-muted); font-weight:400; margin:0 4px; }
-    .gh-stats { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-    .gh-stat { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85em; color:var(--text-main); text-decoration:none; background:var(--background-alt); white-space:nowrap; }
-    .gh-stat:hover { text-decoration:none; background:var(--background); }
-    .gh-stat .gh-stat-count { font-weight:700; }
-    .gh-stat .gh-stat-icon { font-size:0.95em; }
-    /* 代码块容器：字体 + 边框 + 横向滚动 */
-    .gh-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    .gh-code pre { margin: 0; line-height: 1.5; border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; white-space: pre; tab-size: 4; }
-    .gh-code code { display: block; }
-    /* highlight.js 主题（github light + github-dark）：prefers-color-scheme 自动切换明暗 */
-    ${themeCss}
-    </style>
+    <link rel="stylesheet" href="/assets/github.css">
 </head>
 <body>
     ${renderTopbar(owner, repo, ref, filePath, meta)}
@@ -588,10 +529,9 @@ function wrapCodePage(colored, language, plain, owner, repo, ref, filePath, meta
  * @param {string} ref 分支/tag/commit SHA
  * @param {string} dirPath 当前目录路径（空串 = 根目录）
  * @param {string} meta 元数据 { avatarUrl, stars, forks, watching }
- * @param {string} waterCss water.css 源码字符串
  * @returns {string} 完整 HTML 文档
  */
-function renderDirListing(listing, owner, repo, ref, dirPath, meta, waterCss) {
+function renderDirListing(listing, owner, repo, ref, dirPath, meta) {
   const repoUrl = `https://github.com/${owner}/${repo}`;
   const safeOwner = escapeHtml(owner);
   const safeRepo = escapeHtml(repo);
@@ -643,34 +583,7 @@ function renderDirListing(listing, owner, repo, ref, dirPath, meta, waterCss) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${safeOwner}/${safeRepo}${dirPath ? " / " + escapeHtml(dirPath) : ""} · GitHub</title>
-    <style>
-    ${waterCss}
-    /* gh-header 布局（仿照 twitter.css 的 .gh-header，内联以便独立修改） */
-    .gh-header { display:flex; align-items:center; margin-bottom:12px; }
-    .gh-avatar { width:36px; height:36px; border-radius:50%; margin-right:12px; object-fit:cover; }
-    .gh-info { display:flex; flex-direction:column; justify-content:center; line-height:1.4; }
-    body { max-width: 980px; }
-    .gh-topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 16px; border-bottom:1px solid var(--border); margin-bottom:16px; flex-wrap:wrap; }
-    .gh-topbar .gh-header { margin-bottom:0; border-bottom:none; padding:0; }
-    .gh-avatar-ph { background: var(--background-alt); }
-    .gh-repo-path { font-size:1.1em; font-weight:bold; }
-    .gh-repo-path a { color: var(--links); text-decoration:none; }
-    .gh-repo-path .gh-sep { color: var(--text-muted); font-weight:400; margin:0 4px; }
-    .gh-stats { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-    .gh-stat { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; font-size:0.85em; color:var(--text-main); text-decoration:none; background:var(--background-alt); white-space:nowrap; }
-    .gh-stat-hover:hover { text-decoration:none; background:var(--background); }
-    .gh-stat .gh-stat-count { font-weight:700; }
-    .gh-stat .gh-stat-icon { font-size:0.95em; }
-    /* 目录列表 */
-    .gh-dir-parent { display:inline-block; margin-bottom:10px; padding:4px 10px; border:1px solid var(--border); border-radius:6px; color:var(--links); text-decoration:none; font-size:0.9em; }
-    .gh-dir-parent:hover { text-decoration:none; text-decoration:underline; }
-    .gh-dir-list { border:1px solid var(--border); border-radius:6px; overflow:hidden; }
-    .gh-dir-item { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--border); text-decoration:none; color:var(--text-main); }
-    .gh-dir-item:last-child { border-bottom:none; }
-    .gh-dir-item:hover { background:var(--background-alt); }
-    .gh-dir-icon { font-size:1em; }
-    .gh-dir-size { margin-left:auto; color:var(--text-muted); font-size:0.85em; }
-    </style>
+    <link rel="stylesheet" href="/assets/github.css">
 </head>
 <body>
     <div class="gh-topbar">
@@ -744,11 +657,10 @@ function formatCount(n) {
  * @param {Object} env wrangler 注入的环境变量（含可选 GITHUB_TOKEN）
  * @param {string} cleanPath 去首斜杠 + decode 后的路径，如 "github/iOfficeAI/OfficeCLI/npm/package.json"
  * @param {string} rawPathname 原始路径（未 decode），用于检测 @ref 中的 %2F
- * @param {string} waterCss water.css 源码字符串
  * @param {object} hljs highlight.mjs 命名空间 { highlightCode, highlightWith, BUILTIN_LANGS, HLJS_THEME_CSS }
  * @returns {Response}
  */
-export async function serveGithub(_request, env, cleanPath, rawPathname, waterCss, hljs) {
+export async function serveGithub(_request, env, cleanPath, rawPathname, hljs) {
   // 惰性创建 markdown 渲染器（首次请求时绑定 hljs）。
   // 模块级变量，同 isolate 内跨请求复用。
   if (!markdownRenderer && hljs) {
@@ -818,7 +730,7 @@ export async function serveGithub(_request, env, cleanPath, rawPathname, waterCs
       });
     }
     const { html: colored, plain } = await renderHighlighted(raw.text, lang, hljs);
-    const page = wrapCodePage(colored, lang, plain, owner, repo, ref, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
+    const page = wrapCodePage(colored, lang, plain, owner, repo, ref, filePath, meta);
     return new Response(page, {
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
     });
@@ -848,7 +760,7 @@ export async function serveGithub(_request, env, cleanPath, rawPathname, waterCs
 
   // 目录 → 渲染文件列表页。
   if (content.type === "dir") {
-    const page = renderDirListing(content.listing, owner, repo, ref, filePath, meta, waterCss);
+    const page = renderDirListing(content.listing, owner, repo, ref, filePath, meta);
     return new Response(page, {
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
     });
@@ -869,7 +781,7 @@ export async function serveGithub(_request, env, cleanPath, rawPathname, waterCs
   }
 
   // 文档路径统一用 highlight.js 主题（代码块已在 Worker 端由 markdown-it 着色）
-  const page = wrapDocPage(bodyHtml, owner, repo, ref, filePath, meta, waterCss, hljs.HLJS_THEME_CSS);
+  const page = wrapDocPage(bodyHtml, owner, repo, ref, filePath, meta);
   return new Response(page, {
     headers: {
       "content-type": "text/html; charset=utf-8",
