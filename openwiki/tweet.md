@@ -5,7 +5,7 @@ description: 阐明推文渲染的数据源、翻译与缓存策略，以及自�
 tags: [推文, Twitter, fxtwitter, 翻译, R2缓存]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T01:57:17.825Z
+    at: 2026-11-06T02:38:52.437Z
 sources:
   - id: openwiki-source-51d8dc0d173d42237cb85fda
     resource: repo://lib/thread.js

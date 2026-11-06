@@ -877,14 +877,18 @@ async function fetchAndCacheThread(apiUrl, r2Key, refresh, env, lang) {
  * 容易撞的 Cloudflare 边缘 522。只负责数据获取 + R2 写回，HTML /
  * Markdown 渲染仍由后续真实请求完成。
  *
+ * 可按 lang 依次预热多个语言（lang 传空则跳过）。
+ *
  * @param {string} pid 推文 ID
- * @param {Object} env Worker 环境（含 R2 绑定 TWEETS / TRANSLATE_TO）
+ * @param {Object} env Worker 环境（含 R2 绑定 TWEETS / TRANSLATE_TO / PREWARM_LANGS）
  * @param {Object} ctx Worker ExecutionContext（用于后台写回 R2）
+ * @param {string} [lang] 语言（空则按默认 TRANSLATE_TO；传入具体语言则按该语言）
  * @returns {Promise<{data: Object|null, fallback: boolean}|null>}
  */
-export async function prewarmTweet(pid, env, ctx) {
+export async function prewarmTweet(pid, env, ctx, lang) {
   if (!pid) return null;
-  const cfg = { lang: (env && env.TRANSLATE_TO) || "" };
+  const effectiveLang = lang !== undefined ? lang : ((env && env.TRANSLATE_TO) || "");
+  const cfg = { lang: effectiveLang };
   // rawPath 只用到 pid 提取，构造一个合法形态即可
   const rawPath = `__prewarm__/status/${pid}`;
   return fetchTweetData(rawPath, cfg, false, env, ctx);

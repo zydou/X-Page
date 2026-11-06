@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:3a581d57235d280bfdc1c42ca2bc1a4f19cef5868d7b6445f724aa8428d810a1",
+  "pageVersion": "sha256:304e8ab51299e1e71d81c28407d2b218ceeaae3eead819e137e679024a975f22",
   "claims": [
     {
       "id": "claim_5e3faac959e74ae19f00cc86252f7a6b",
@@ -8,7 +8,7 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:b6f9d2fb00fb68f2f952cd3cf75051c49267017f10d0eddaf28a4c5c8825b3bc"
+          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:b6f9d2fb00fb68f2f952cd3cf75051c49267017f10d0eddaf28a4c5c8825b3bc"
+          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
         }
       ]
     },
@@ -28,7 +28,7 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:b6f9d2fb00fb68f2f952cd3cf75051c49267017f10d0eddaf28a4c5c8825b3bc"
+          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
         }
       ]
     },
@@ -64,17 +64,17 @@
     },
     {
       "id": "claim_e79ad653ee1540e199de451710163374",
-      "statement": "prewarmTweet 是内部直调预热入口：用默认语言（TRANSLATE_TO）调 fetchTweetData，通过后台 write 回写 R2，不做渲染",
+      "statement": "prewarmTweet 是内部直调预热入口：用传入的 lang（或 TRANSLATE_TO）调 fetchTweetData，通过后台 write 回写 R2，不做渲染",
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:b6f9d2fb00fb68f2f952cd3cf75051c49267017f10d0eddaf28a4c5c8825b3bc"
+          "version": "repo-file-v1:sha256:44cdf09fef545656043eabc6bdcf0899e98e46f000328efb5bce26e71445f71d"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T01:57:17.825Z"
+    "at": "2026-11-06T02:38:52.437Z"
   }
 }

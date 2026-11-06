@@ -5,7 +5,7 @@ description: 梳理持久化层 R2 缓存策略与 Workers AI 绑定，以及环
 tags: [R2, 存储, Workers AI, 配置]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-05T11:10:10.273Z
+    at: 2026-11-06T02:38:52.437Z
 sources:
   - id: openwiki-source-529e9dc3a2b5d10c27b03b93
     resource: repo://lib/to-markdown.js
