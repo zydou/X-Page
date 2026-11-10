@@ -97,10 +97,12 @@ export async function serveVideo(_request, cleanPath, host) {
 <div class="artplayer"></div>
 <script src="/assets/artplayer.js" defer></script>
 <script>
-Artplayer.ASPECT_RATIO = ["default", "1:1", "3:4", "4:3", "9:16", "16:9"];
-Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
-const art = new Artplayer(
-    {
+// artplayer.js 带 defer，要等文档解析完（DOMContentLoaded 之前）才执行；
+// 本内联脚本会先跑，故包一层 DOMContentLoaded 保证 Artplayer 已就绪。
+window.addEventListener("DOMContentLoaded", () => {
+  Artplayer.ASPECT_RATIO = ["default", "1:1", "3:4", "4:3", "9:16", "16:9"];
+  Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+  new Artplayer({
     container: ".artplayer",
     url: "${playerUrl}",
     playbackRate: true,
@@ -109,8 +111,8 @@ const art = new Artplayer(
     fullscreen: true,
     miniProgressBar: true,
     lang: "zh-cn",
-    }
-);
+  });
+});
 </script>
 </body>
 </html>`;
