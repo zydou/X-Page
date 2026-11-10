@@ -5,15 +5,17 @@ description: 解释三条路由的 Markdown 变体生成、约束与缓存机制
 tags: [Markdown, 内容协商, Workers AI, R2缓存]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-05T11:10:10.273Z
+    at: 2026-11-10T05:42:52.452Z
 sources:
+  - id: openwiki-source-8a2e26d4137b8250f68bb869
+    resource: repo://build.sh
   - id: openwiki-source-4cc5b54b5fc77565a9fc3760
     resource: repo://lib/markdown.js
   - id: openwiki-source-529e9dc3a2b5d10c27b03b93
     resource: repo://lib/to-markdown.js
   - id: openwiki-source-191ac1117a045536f59c18b2
     resource: repo://routes/html.js
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 ---
 
 # Markdown 转换
@@ -96,7 +98,9 @@ Markdown 响应带 `x-markdown-tokens` 头，是 `lib/utils.js estimateTokens()`
 
 ## 6 两个 bundle 的自我管理
 
-markdown-it.mjs 与 highlight.mjs 不是仓库源文件，而是构建产物。构建细节见 [内联资产与构建部署](assets-and-build.md)：CI / `build.sh` 每次部署时从 jsdelivr / npm 下载源码、用 esbuild 打包成 ESM。Markdown-it 的打包把 `export{Rt as default}` 重写为 `export const MarkdownIt = Rt`，因为它原本是 CommonJS 默认导出为主的库（`build.sh:44-50`）。
+markdown-it.mjs 与 highlight.mjs 不是仓库源文件，而是构建产物。构建细节见 [外置资产与构建部署](assets-and-build.md)：CI / `build.sh` 每次部署时从 jsdelivr / npm 下载源码、用 esbuild 打包成 ESM。Markdown-it 的打包把 `export{Rt as default}` 重写为 `export const MarkdownIt = Rt`，因为它原本是 CommonJS 默认导出为主的库（`build.sh:30-35`）。
+
+两者都是 **Worker 端 SSR 专用**、不下发浏览器：`markdown-it.mjs` 只在 Worker 里把 markdown 渲染成 HTML，`highlight.mjs` 只在 Worker 里把代码块着色成静态 `<span>`；浏览器拿到的已是成品 HTML，零 JS 成本。这一点与外置到 `/assets/` 的浏览器资产（`twitter.css` / `github.css` / `artplayer.js`）职责分明。
 
 ## 7 关联
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:c3be479c22caa4fb604e217bc449383b4f46cf21f64e0d9bb6d43959edf5d7db",
+  "pageVersion": "sha256:bba0b0aa7e0e9ffa37e261ff55130287b12d5dc9cf23fd79ff124a18253ad63f",
   "claims": [
     {
       "id": "claim_a719d18450794e24a0f9e027c75a6d86",
@@ -24,11 +24,11 @@
     },
     {
       "id": "claim_24e8f4f8c7624d84b50f6d1e209948e7",
-      "statement": "/vid/ 代理模式喂给 Artplayer 的是 /proxy/ 路径，直连模式用原始 URL，Artplayer JS 直接内联进 script。",
+      "statement": "/vid/ 代理模式喂给 Artplayer 的是 /proxy/ 路径，直连模式用原始 URL；Artplayer 库通过外链 <script src=/assets/artplayer.js defer> 加载，不再内联进 script。",
       "evidence": [
         {
-          "resource": "repo://routes/video.js",
-          "version": "repo-file-v1:sha256:fd576ccc53eb08146849b6a0cf6b2a630599878eaa6ba2202c76fd8dc10b783d"
+          "resource": "repo://routes/video.js#L81-L98",
+          "version": "repo-lines-v1:sha256:6e48d3061191d87d925fb68241df48bf8ddfdc93b63724613282026f14be27e1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhNzg4MGM0YmQ4N2Y5NTBkZGM5NDZiODBjNWUxYjc0OTFiNTE2ZmYxYTY3YTVmOGYyMGMxZjMwYWU5MmU4M2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0ODUzYjcxZmJlYTNiOGNkMmQ4OWM4Y2IwMDg4OTQ2MWQ5ZWFhMGQzMWM4Y2E2NzRmZTEwOTRmOGNjOGRkMDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBjMzA0MDlmMzU1ZmZlMzExM2Q1ZWQwYzkyYjNhZWMxMWYyYTllZDcyN2ZhYTBjOWM3ZjFhMmNhZTkyMDI5NDUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJkZTY3Mjc3ODRhMGZkMTFmNmNlMGE4ZjYzNTI0ZDdjMWJmNTQ4ZDU2MGM5ZmI2MjM0OTQyNjg5ZGY1YmZkNTUifQ"
         }
       ]
     },
@@ -38,7 +38,7 @@
       "evidence": [
         {
           "resource": "repo://routes/github.js",
-          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+          "version": "repo-file-v1:sha256:b5271633e4c736d5bfc068de1f98e00c046b7e848a14cf37b12e0703038b0e95"
         }
       ]
     },
@@ -48,7 +48,7 @@
       "evidence": [
         {
           "resource": "repo://routes/github.js",
-          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+          "version": "repo-file-v1:sha256:b5271633e4c736d5bfc068de1f98e00c046b7e848a14cf37b12e0703038b0e95"
         }
       ]
     },
@@ -58,7 +58,7 @@
       "evidence": [
         {
           "resource": "repo://routes/github.js",
-          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+          "version": "repo-file-v1:sha256:b5271633e4c736d5bfc068de1f98e00c046b7e848a14cf37b12e0703038b0e95"
         }
       ]
     },
@@ -68,13 +68,13 @@
       "evidence": [
         {
           "resource": "repo://routes/github.js",
-          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+          "version": "repo-file-v1:sha256:b5271633e4c736d5bfc068de1f98e00c046b7e848a14cf37b12e0703038b0e95"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-05T11:10:10.273Z"
+    "at": "2026-11-10T05:42:52.452Z"
   }
 }

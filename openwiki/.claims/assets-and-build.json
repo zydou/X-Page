@@ -1,14 +1,18 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:171ae4470fa03fa5a1c03e9353cbaa3f226c73db70181a1b4c2241b0a4beb161",
+  "pageVersion": "sha256:0db7fae8167853f0195408a93acd6661385075adf667307d1efbf9d65d9e2c4d",
   "claims": [
     {
       "id": "claim_f51f162b24414602989954d65bc97063",
-      "statement": "worker.js 导入 WATER_CSS TWITTER_CSS ARTPLAYER_JS 三种内联资产并作为参数下发，下游模块不自行 import。",
+      "statement": "worker.js 通过 Text module 导入 ARTPLAYER_JS、TWITTER_CSS、GITHUB_CSS 三份浏览器资产，并在 /assets/ 分支按文件名外置 serve，下游模块用外链引用而不内联。",
       "evidence": [
         {
-          "resource": "repo://worker.js",
-          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+          "resource": "repo://worker.js#L121-L136",
+          "version": "repo-lines-v1:sha256:ec065cd9a367cef6befea770bb93ddfeb06eeaaff2547afdffef38ab36fff58f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNTk2YTAzOTAxZDNlNzM3MjIwMTA5NjY0NzFmY2IwNTNmMjAyMzRiNjZmYjUxNDdhOGE4ZmZlOTUyYzlhMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiN2Q0NDc1ZjJmYjRjMmY1ODA5OTk1MDEzMzk5NzA2NGY4M2Q1NjU3ZTkwM2M1ODYwMzY0NjNmODI0Nzc0MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ODVkNTA3MDA1ODE3ODEyODIyYmMxZDVkZTY1NTFlYzIyZjc5NmFkNWFhZjNkNmY3NWU2MDM5ZjQ4MTBhY2YifQ"
+        },
+        {
+          "resource": "repo://worker.js#L36-L38",
+          "version": "repo-lines-v1:sha256:b1c6d3a75ce13037b18fccc96980f122223b87208e000dc4cd78f151242a6869:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQwNTAyYzg1OTk5YzMwOGQ3YjkwNTNiMmEyOTcwMzhiMzczNGMwMDY2N2NmNTI5ZTk0OTIwMWVmMDhjOTUwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY5ODU3NzM0OGUwMTIxN2M2MzU3MTE5OGY0OGZlYWMyZTQ1NjY5Y2NmNzQwMzIyYWYwYzBkMDk4OGZmMmE1ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjZkYzYzMGVlNWIzOTZmY2VhY2ExMzY4ZTk5YmZkOThkYWFiYjg5NDVjM2JlYjhjYjEzZjQxMDcyOTBiM2YyYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzkyY2U1MjdiNzhlYzI2Y2Y1YmU0MzBjNGNkYjA4OGIwMzVhNDAxYWVjYjIyYWY4ZTkxNzYyNTg0NjRjMDM4MyJ9"
         }
       ]
     },
@@ -24,31 +28,31 @@
     },
     {
       "id": "claim_16514e106f47439693b6ed544659fa1e",
-      "statement": "build.sh 用 JSON.stringify 包装 artplayer.js 生成 artplayer.mjs，避免 esbuild minify 后反引号模板字面量展开出错。",
+      "statement": "build.sh 用 JSON.stringify 把 artplayer.js 源码包装成 export default 字符串生成 artplayer.mjs，避免反引号/`${` 在模板字面量里被错误解析（因此不用 esbuild minify）。",
       "evidence": [
         {
-          "resource": "repo://build.sh",
-          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+          "resource": "repo://build.sh#L6-L19",
+          "version": "repo-lines-v1:sha256:47449569b2eae3a1a294301dc3aef23f8d107a6408c716a7b307d9ab4d4993be:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiODc4ZGQzOWI0NGZiODQ0ZmM3Zjg5YmU0ZTVmZTY4NWE5YzEyZTI0YjNjMzJhMDEwNWM3OWFkNjE1YTViMmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVkMWRhNWY0YWFkOWI3YTEwNjA0YzgxMGI5YmI1MTUyNzk3OGI2Zjc3ZjJhNWE5M2U4ZTAzMDFjZjVmNjk2NmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA0MzI5MGFmMmM2YmUzMTZhNTc4ZmNjMjZlZjA0MGFjMTJjNDA1ZjZmNDZkMWFhMDYwMDZjOTFiNzA4NTJkYjEifQ"
         }
       ]
     },
     {
       "id": "claim_855b53a022c541bdb30dd16e4f6c82bd",
-      "statement": "build.sh 构建 markdown-it.mjs：npm 安装 markdown-it@14.1.0 后 esbuild bundle，并把默认导出重写为 MarkdownIt 命名导出。",
+      "statement": "build.sh 构建 markdown-it.mjs：npm 安装 markdown-it@14.1.0 后 esbuild bundle 成自包含 ESM，并把默认导出重写为 MarkdownIt 命名导出，供 Worker 端 /github/ 渲染用。",
       "evidence": [
         {
-          "resource": "repo://build.sh",
-          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+          "resource": "repo://build.sh#L21-L38",
+          "version": "repo-lines-v1:sha256:68765be93da2b175d30174fba3834dbc4706bb94c52bdbf069b1d2830d21445b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1ZWQ5ZmUxNzE5ZThjZDYxYjEwODQzZjFkMzUwOGEwODBmYzRlYTcyMjY2MGY4NTU1MTRmMDQzNjkyNTg5Y2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE2ZTMyM2JmNzhmYjg3NzkwMzAyMGNhNzhjY2FiMDMzOTkyYTBmMWZkNjg0Yjk5MWE5NThjNDQxYmU4MDZjZDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhjYWNlZjBhZDgwMTU1M2U5ZjM3ODAxODY2YTFkNWEwMmU4OTgxYWY1NmFmMmY4OTEwNjE2OWI3YWVjYmJhMjkifQ"
         }
       ]
     },
     {
       "id": "claim_b83b4785742c4b859357089c58e4ff3b",
-      "statement": "build.sh 构建 highlight.mjs：拼接 highlight.js core + 15 种内置语言模块与 GitHub 主题 CSS，暴露代码高亮导出。",
+      "statement": "build.sh 构建 highlight.mjs：拼接 highlight.js core + 15 种内置语言模块与 GitHub 亮暗主题 CSS，暴露 highlightCode/highlightWith/BUILTIN_LANGS/HLJS_THEME_CSS，仅 Worker 端 SSR 用、不下发浏览器。",
       "evidence": [
         {
-          "resource": "repo://build.sh",
-          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+          "resource": "repo://build.sh#L40-L66",
+          "version": "repo-lines-v1:sha256:f06320b79546c20a59dc082a7e89d23e4d3c28866bad88d177d0bdf7338bee62:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4MjExNTQxNjI3YzVhMGQzZTdmN2ZmNDlhNzlhZTRmYjdiYjIzODc0YjI3NGMzMDFiZWY3ZDdmMzA4MWM1ZmMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJkMDZmZjMwMTBlZWQ1MDVjYmJhMDI1ZGY4Y2ZlMjZhM2M3YjZkMTliN2U0NjJjOTZjOWM2MDU5ODMyODIzODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY4NzhhZWJiM2JmNTIwYjFiYjlkZjMxMTk4Mjc2MmZlNGQ5ZjM5Zjg0ZWYxYzA1YzU3M2M0YWRlZTc4NjJjMzEifQ"
         }
       ]
     },
@@ -58,7 +62,7 @@
       "evidence": [
         {
           "resource": "repo://.github/workflows/deploy.yaml",
-          "version": "repo-file-v1:sha256:87be8abed08537b9b1ca0a0844402c57f710d7f00b3e1d3231e7ca5b66fa052d"
+          "version": "repo-file-v1:sha256:b173849c174af68ccf2d14cb04d36ad9f46aad1c830a69d49f1a2de10398c5f1"
         }
       ]
     },
@@ -74,27 +78,75 @@
     },
     {
       "id": "claim_81c4074f9f05455a8a0dc6b7a5c75054",
-      "statement": "/github/ 的代码块由 Worker 端调用 HLJS.highlightCode 在 Worker 渲染，浏览器零 JS。",
+      "statement": "/github/ 的代码文件由 Worker 端调 highlightCode/highlightWith 渲染着色静态 HTML，浏览器零 JS；文档路径则由 markdown-it 的 highlight 回调交给 hljs 着色。",
       "evidence": [
         {
-          "resource": "repo://routes/github.js",
-          "version": "repo-file-v1:sha256:e45b69c897fc5c91fee9a0476b22e32b5039c7e5ae4bd4e3373c7f2a8de20e3f"
+          "resource": "repo://lib/markdown.js#L28-L51",
+          "version": "repo-lines-v1:sha256:7744ba264a840a998a6a195e3e114c09bb37bc60f723de22bb1da3d37c8a24ce:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhhNGEzODZlNjdlNmY2ZGVmMGZiODQzMTgxNzc3N2JlZjJhMDBkYTFkMzRhYWIyODNlZjg3OWE5YjVmYTMyYjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImViNTBjOGMyZmI5NDc1OTgxODZhYmVmM2I2MjI3NjNmMGY1NDY5YWNjMzJkZjBjYTc3OGQ3NGU3NTg0NjhhMTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://routes/github.js#L388-L402",
+          "version": "repo-lines-v1:sha256:9808afc1d381246ef1b3f7d8cd41f4a344b6528ae8972a149889aac6216c367a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmYjM4ZGJkMTcxYWMwOGY1MDJmMDY3MWM1YjYyYjM5YWQ1MTg2MmEzMzlkMGVhOTZjODhmODA3ZGU4ZDc4NWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRlMGQwMTRjYWI5YjZkNzJkZjEwNmUyMTdhZGEzYjZjNzJlNjY3ODI3Njk2ZjlhY2E5NzFlZDQyYWQxNGNkOWUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUwYjkxZTlmMmZlMWNiYjAxNDBiZmZlODU3MWY2NjdmMmFjYmZmYjdmZTc5ZDhmYzhmNWZiZDgxZWM0ZDExMjgifQ"
         }
       ]
     },
     {
       "id": "claim_3728b27ae8a54769b83eeffe5eb25082",
-      "statement": "video 路由页 style 注入 WATER_CSS 与 HLJS_THEME_CSS，script 注入 ARTPLAYER_JS 以构成自包含页面。",
+      "statement": "video 路由页通过外链 <script src=/assets/artplayer.js defer> 加载播放器库，不再内联注入；样式也不再注入 WATER_CSS。",
       "evidence": [
         {
-          "resource": "repo://routes/video.js",
-          "version": "repo-file-v1:sha256:fd576ccc53eb08146849b6a0cf6b2a630599878eaa6ba2202c76fd8dc10b783d"
+          "resource": "repo://routes/video.js#L88-L98",
+          "version": "repo-lines-v1:sha256:9bf10d11291c2bade51fdf6ecdd9c0fa833764559f45a308801ab6ad086f2282:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBjYjc0NTMwMDEwNjg4NzIzYmYyZDU1ODgxMGJjZTU0MGVhNWU1NDA5NzE4MDZjYzkwOWRmZjczMjlmYjM1ZGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0ODUzYjcxZmJlYTNiOGNkMmQ4OWM4Y2IwMDg4OTQ2MWQ5ZWFhMGQzMWM4Y2E2NzRmZTEwOTRmOGNjOGRkMDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBjNDU2ZTJlNGQ4YzQyZWI4NjVkZmY0ZTc3ZTZiZGI5NTFiMTRkZDZiNzE5NGI2NTNlMTYwMzI3Y2UwMTUyNDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJkZTY3Mjc3ODRhMGZkMTFmNmNlMGE4ZjYzNTI0ZDdjMWJmNTQ4ZDU2MGM5ZmI2MjM0OTQyNjg5ZGY1YmZkNTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_efe3cc34e0914ed19b95468a04818699",
+      "statement": "/assets/ 分支以 Cache-Control: public, max-age=31556952, immutable 外置 serve twitter.css / github.css / artplayer.js，让飞书多 iframe 共享一份浏览器缓存；未命中资产名返回 404。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js#L121-L136",
+          "version": "repo-lines-v1:sha256:ec065cd9a367cef6befea770bb93ddfeb06eeaaff2547afdffef38ab36fff58f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNTk2YTAzOTAxZDNlNzM3MjIwMTA5NjY0NzFmY2IwNTNmMjAyMzRiNjZmYjUxNDdhOGE4ZmZlOTUyYzlhMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiN2Q0NDc1ZjJmYjRjMmY1ODA5OTk1MDEzMzk5NzA2NGY4M2Q1NjU3ZTkwM2M1ODYwMzY0NjNmODI0Nzc0MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ODVkNTA3MDA1ODE3ODEyODIyYmMxZDVkZTY1NTFlYzIyZjc5NmFkNWFhZjNkNmY3NWU2MDM5ZjQ4MTBhY2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c3a94039f51b451db0df6c33e1e9a07d",
+      "statement": "浏览器资产（twitter.css / github.css / artplayer.mjs）外置到 /assets/ 长缓存，Worker 端 SSR 资产（markdown-it.mjs / highlight.mjs）不下发浏览器——两类资产职责分明。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js#L121-L136",
+          "version": "repo-lines-v1:sha256:ec065cd9a367cef6befea770bb93ddfeb06eeaaff2547afdffef38ab36fff58f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNTk2YTAzOTAxZDNlNzM3MjIwMTA5NjY0NzFmY2IwNTNmMjAyMzRiNjZmYjUxNDdhOGE4ZmZlOTUyYzlhMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiN2Q0NDc1ZjJmYjRjMmY1ODA5OTk1MDEzMzk5NzA2NGY4M2Q1NjU3ZTkwM2M1ODYwMzY0NjNmODI0Nzc0MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ODVkNTA3MDA1ODE3ODEyODIyYmMxZDVkZTY1NTFlYzIyZjc5NmFkNWFhZjNkNmY3NWU2MDM5ZjQ4MTBhY2YifQ"
+        },
+        {
+          "resource": "repo://worker.js#L36-L44",
+          "version": "repo-lines-v1:sha256:f95adecd98cfda01998a5a71f5d841e4cdad30406a1d0169b921c395a95b862a:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQwNTAyYzg1OTk5YzMwOGQ3YjkwNTNiMmEyOTcwMzhiMzczNGMwMDY2N2NmNTI5ZTk0OTIwMWVmMDhjOTUwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGUxNmNmZmZlYzE2ZWJiNzAyOWViMjcwZmUwOWZjMDgxMTIxZWVjZWE4MzRkMjIxMjM3MjIzNGVlZDNmMDQ0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjZkYzYzMGVlNWIzOTZmY2VhY2ExMzY4ZTk5YmZkOThkYWFiYjg5NDVjM2JlYjhjYjEzZjQxMDcyOTBiM2YyYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODNmNTVlZjE3NzQzNDMwMTkzMzM5YWFhNzU2MTZjYTFjZTI4NWRkNmM4ODNjZTIxMjYxY2Y5ODNjZDMxNjhmNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_2d99c3759be44356a8f194520241467b",
+      "statement": "build.sh 四步幂等：包装 artplayer.mjs、构建 markdown-it.mjs、构建 highlight.mjs、校验 assets/github.css 存在；不再拉取/minify water.css，assets/*.css 已提交进仓库不被改动。",
+      "evidence": [
+        {
+          "resource": "repo://build.sh",
+          "version": "repo-file-v1:sha256:47db12e2eed8d19df67c58338494636afbf9e58da079a43cb22e4e65e79cfe43"
+        }
+      ]
+    },
+    {
+      "id": "claim_c95d3490da934f6d94484be3f34ac46e",
+      "statement": "CI deploy 工作流触发路径为 worker.js/routes/**/lib/**/assets/**/wrangler.toml/build.sh/deploy.yaml 加 workflow_dispatch。",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/deploy.yaml#L4-L14",
+          "version": "repo-lines-v1:sha256:3a1ed3c2d12d0ac92c9e3e14ee8b88e71cdec0edb5cad48393b9cfe0ec04a035:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5NmRjNDgxNDlmNWE4M2QxZWQ2ZGJiMzliYmM3ZTJiOTAyYWEzZDM0ZDZiZDVhZTRiMjkxYjY4ZGYwY2E3OWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiNThjNzhmMWE1ZGY1ZGZiYzEzYWQ3MTlmZWZlYjc1MmJhZDQ4OGEzNTlhY2NjMGY5MTE3MGFkMTgxZGE5MzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1NTBhZDUyYzk5ZTMxNDk4MWY2NmQ4NjI3ZTA1OGY1NzM1ZTA1NjU4ZmFlNTg0YzQ3ZTJjMWE5MjI4NmYzMmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwMDE0YmEzYjgyODg4YWEwOGM1MzYyYTA1Y2JiM2E2YTBiMDVlYmRkZDlkY2VjY2RlMGNlZmMzZWM5ODVmMWEifQ"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T03:00:20.989Z"
+    "at": "2026-11-10T05:42:52.452Z"
   }
 }

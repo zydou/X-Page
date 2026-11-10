@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:9a9f260f42f21d31ff3ae2e9c390b2f1bc8336fdd951d9b32c3b715b81205275",
+  "pageVersion": "sha256:816e4dadcb6a08c14e736652ae14672de4de8ce780e2bad906f49514bfff042c",
   "claims": [
     {
       "id": "claim_5e3faac959e74ae19f00cc86252f7a6b",
@@ -8,7 +8,7 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
+          "version": "repo-file-v1:sha256:c0f9a628b67de1081029ffdba7ad924344300ffa5679949c95f307c333034c7d"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
+          "version": "repo-file-v1:sha256:c0f9a628b67de1081029ffdba7ad924344300ffa5679949c95f307c333034c7d"
         }
       ]
     },
@@ -28,7 +28,7 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
+          "version": "repo-file-v1:sha256:c0f9a628b67de1081029ffdba7ad924344300ffa5679949c95f307c333034c7d"
         }
       ]
     },
@@ -68,13 +68,23 @@
       "evidence": [
         {
           "resource": "repo://routes/tweet.js",
-          "version": "repo-file-v1:sha256:61077b68cecdd8afb26b0d4d18940764875467526568b6edaeca5ab4791a1cd0"
+          "version": "repo-file-v1:sha256:c0f9a628b67de1081029ffdba7ad924344300ffa5679949c95f307c333034c7d"
+        }
+      ]
+    },
+    {
+      "id": "claim_0e4087a528d2405ea89775bb51ff0799",
+      "statement": "推文页样式经 wrapHtml 的 <link rel=stylesheet href=/assets/twitter.css> 外链加载（twitter.css 内含裁剪 water 子集 + 推文专属覆盖），不再内联 water.css+twitter.css。",
+      "evidence": [
+        {
+          "resource": "repo://routes/tweet.js#L420-L431",
+          "version": "repo-lines-v1:sha256:ce966771e36ff6074801abea590f9fbe50018bf69ecc24d5a73164e0c17e66e3:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1NzQ2YTM3OTNjNWJiMTA3OTY1YWI0MThkMWMxMTVmZTU4YzIzYjQzMjNjMWE5M2EyZDhlNzQxOTc1NDU4ZGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkNjkxOGVkZjc1MzdjMDI1MTAzYzU1NjA4ZTFiYzMxNDBiMDYzYzk4ZTRjOWQ5ZWM2YmUyYzUxMjA4MGU1OTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgzYjEzNzFiZjhlYjUxZjEwYmUwYTliNmVkNTg2NjFhZWQwYWQ0NmZiOWQ5NGViNDNkNTllMTFlMzM4MGNhYzYifQ"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T03:00:20.989Z"
+    "at": "2026-11-10T05:42:52.452Z"
   }
 }

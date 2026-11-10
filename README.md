@@ -233,35 +233,28 @@ Telegram 把每条更新 POST 到 `setWebhook` 指定的 URL；设置 `secret_to
 ### 本地开发
 
 ```bash
-# 1. 拉取并压缩 CSS
-curl -fsSL https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css -o water.css
-npx esbuild *.css --minify --legal-comments=none --drop:console --drop:debugger --outdir=. --allow-overwrite
+# 1. 拉取并构建远端 JS 资产（artplayer / markdown-it / highlight.js，全部幂等跳过）
+sh build.sh
 
-# 2. 拉取 artplayer.js 并包装为 ES module
-curl -fsSL https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js -o artplayer.js
-node -e '
-const fs = require("fs");
-const src = fs.readFileSync("artplayer.js", "utf8");
-fs.writeFileSync("artplayer.mjs", "export default " + JSON.stringify(src) + ";\n");
-'
-
-# 3. 本地开发
+# 2. 本地开发
 npx wrangler dev
 ```
 
-> 为什么不直接用 `esbuild artplayer.js --minify`？
+> `assets/*.css`（twitter.css / github.css）已提交进仓库，无需本地构建。
+> 为什么 artplayer 用 `JSON.stringify` 包装成 `artplayer.mjs` 而不直接 `esbuild --minify`？
 > 因为压缩后的源码里包含反引号 `` ` `` 和占位符 `${`，直接内联进模板字面量会被 JS 引擎错误解析。
 > 先把整段源码 `JSON.stringify` 成一个字符串字面量再作为 ESM 默认导出导入，即可安全地作为字符串值内联。
 
 ### 自动部署
 
-推送以下文件的变更至 `main` 分支时，GitHub Actions 会自动拉取依赖、包装资产、压缩 CSS 并部署：
+推送以下文件的变更至 `main` 分支时，GitHub Actions 会执行 `npx wrangler deploy`（Wrangler 先跑 `sh build.sh` 构建远端资产再发布，随后重新启用 Worker Cache）：
 
 - `worker.js`
 - `routes/`
 - `lib/`
-- `twitter.css`
+- `assets/`
 - `wrangler.toml`
+- `build.sh`
 - `.github/workflows/deploy.yaml`
 
 也可手动在 Actions 页面触发 `workflow_dispatch`。
@@ -269,10 +262,10 @@ npx wrangler dev
 ## 技术栈
 
 - **运行时：** Cloudflare Workers
-- **语言：** 纯 JavaScript（ES Module），无构建步骤，零依赖
+- **语言：** 纯 JavaScript（ES Module），无框架、无运行时 npm 依赖（markdown-it / highlight.js 在 CI 由 `build.sh` 打包成 Worker 端 SSR 用的 `.mjs` bundle）
 - **上游 API：** [FxEmbed](https://github.com/FxEmbed/FxEmbed)（获取推文数据）
-- **基础样式：** [water.css](https://github.com/kognise/water.css)（在 CI 中下载并内联）
-- **自定义样式：** `twitter.css`（覆盖 water.css 的推文布局样式）
+- **基础样式：** [water.css](https://github.com/kognise/water.css) 的裁剪子集（并入 `assets/twitter.css` / `assets/github.css`，外置到 `/assets/` 长缓存）
+- **自定义样式：** `assets/twitter.css`（water 子集 + 推文布局覆盖）、`assets/github.css`（water 子集 + highlight 主题 + `.gh-*`）
 
 ## License
 

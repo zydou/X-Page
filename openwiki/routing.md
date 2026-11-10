@@ -1,15 +1,17 @@
 ---
 type: 系统
 title: 路由与请求处理
-description: 说明统一 Worker 如何分发请求到各子路由，强调路由优先级与兜底逻辑
+description: 说明统一 Worker 如何分发请求到各子路由，强调路由优先级、外置 /assets/ 分支与兜底逻辑
 tags: [路由, 请求分发, Worker]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-05T11:10:10.273Z
+    at: 2026-11-10T05:42:52.452Z
 sources:
+  - id: openwiki-source-8671e0889cf4d1fe8869457d
+    resource: repo://routes/index.js
   - id: openwiki-source-1adf5eb6c74462684e873d78
     resource: repo://worker.js
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 ---
 
 # 路由与请求处理
@@ -18,11 +20,11 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 ## 1 路由分发优先级
 
-`worker.js:61-119` 的 `fetch()` 收到请求后先对 `pathname` 去首斜杠、做一次 `decodeURIComponent`（失败时保留原值、靠下游再 decode 一次），然后按顺序判断、把命中的路径委托给子模块的 handler：
+`worker.js:79-145` 的 `fetch()` 收到请求后先对 `pathname` 去首斜杠、做一次 `decodeURIComponent`（失败时保留原值、靠下游再 decode 一次），然后按顺序判断、把命中的路径委托给子模块的 handler：
 
 | 优先级 | 匹配条件 | 处理者 | 用途 |
 |---|---|---|---|
-| 1 | `/` 空路径 | `routes/index.js` 的 `indexHtml()` | 使用说明页（中英双语） |
+| 1 | `/` 空路径 | `routes/index.js` 的 `indexHtml()` | 302 跳转到 `https://github.com/zydou/X-Page` |
 | 2 | `favicon.ico` | 静默返回 204 | 不进其他 |
 | 3 | 名为 `webhook` | `routes/webhook.js` 的 `handleWebhook()` | Telegram bot webhook |
 | 4 | `vid/` 或 `vid` | `routes/video.js` `serveVideo()` | 视频播放器 HTML |
@@ -30,14 +32,16 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 | 6 | `html/` 或 `html` | `routes/html.js` `serveHtml()` | HTML 抓取改写 |
 | 7 | `wechat/` 或 `wechat` | `routes/wechat.js` `serveWechat()` | 微信公众号文章 |
 | 8 | `proxy/` 或 `proxy` | `routes/proxy.js` `handleProxy()` | 通用媒体代理 |
-| 9 | `github/` 或 `github` | `routes/github.js` `serveGithub()` | GitHub README/文件渲染 |
-| 10 | 其余全部 | `routes/tweet.js` `serveTweet()` | 推文（兜底） |
+| 9 | `assets/` 前缀 | `worker.js` 内联分支 | 外置静态 CSS/JS（immutable 长缓存） |
+| 10 | `github/` 或 `github` | `routes/github.js` `serveGithub()` | GitHub README/文件渲染 |
+| 11 | 其余全部 | `routes/tweet.js` `serveTweet()` | 推文（兜底） |
 
 ### 1.1 为什么顺序是这个样子
 
-- **根路径先来**：`/index` 用量页由 `routes/index.js` 的静态模板直接生成，不做异步 I/O，返回的是纯字符串 HTML。
+- **根路径先来**：`/` 由 `routes/index.js` 的 `indexHtml()` 返回 302 重定向到项目 GitHub 主页，不做异步 I/O。
 - **favicon 静默吞掉**：避免 404 噪音。
 - **webhook 在媒体子路由之前**：它是唯一非 GET 的模式（POST 入口）。
+- **`/assets/` 在 proxy 之后、github 之前**：静态资产分支（`worker.js:121-136`）匹配 `assets/` 前缀，按文件名从 Text module 导入的字符串里取 body 外置 serve，带 `Cache-Control: public, max-age=31556952, immutable`。它必须排在推文兜底之前，否则 `assets/twitter.css` 会被当推文解析。
 - **推文是兜底**：`/<user>/status/<id>` 形态最宽泛，任何不符合其他前缀的路径都试着按推文格式解析。新加固定前缀的子路由都必须插到推文判断之前。
 
 ### 1.2 兜底逻辑与 404
@@ -46,9 +50,9 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 ## 2 各子路由做什么
 
-### 2.1 `GET /` → 说明页
+### 2.1 `GET /` → 302 跳 GitHub
 
-`routes/index.js` 的 `indexHtml(host)` 用调用方的 host 头生成中英双语使用说明页，列出各前缀用法示例，不依赖服务端异步时间渲染。
+`routes/index.js` 的 `indexHtml(_host)` 返回 302，`location` 指向 `https://github.com/zydou/X-Page`（`routes/index.js:8,16-21`）。`_host` 参数保留以兼容 `worker.js` 调用方但不再使用。
 
 ### 2.2 `POST /webhook` → Telegram Bot
 
@@ -56,7 +60,7 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 ### 2.3 `GET /vid/...` → 视频播放器
 
-`serveVideo(request, cleanPath, host, ARTPLAYER_JS)`。内联 Artplayer JS 拼出完整页面，见 [媒体代理与 GitHub 渲染](media-github.md)。
+`serveVideo(request, cleanPath, host)`。外链 `/assets/artplayer.js` 加载播放器库拼出完整页面，见 [媒体代理与 GitHub 渲染](media-github.md)。
 
 ### 2.4 `GET /img/...` → 图片预览
 
@@ -74,13 +78,17 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 `handleProxy(request)`。透传 Range、响应头写死长缓存与 inline。见 [媒体代理与 GitHub 渲染](media-github.md)。
 
-### 2.8 `GET /github/...` → GitHub 仓库浏览
+### 2.8 `assets/<name>` → 外置静态资产
 
-`serveGithub(request, env, cleanPath, rawPathname, WATER_CSS, HLJS)`。文档走 GitHub API 渲染 markdown，代码文件走 highlight.js Worker 端高亮。见 [媒体代理与 GitHub 渲染](media-github.md)、[Markdown 转换](markdown.md)。
+`worker.js:121-136` 的内联分支。按 `assetName` 从 `{ "twitter.css", "github.css", "artplayer.js" }` 里取 Text module 导入的 body，带 immutable 长缓存返回；未命中返回 404。见 [外置资产与构建部署](assets-and-build.md)。
 
-### 2.9 `GET /<user>/status/<id>` → 推文
+### 2.9 `GET /github/...` → GitHub 仓库浏览
 
-`serveTweet(request, env, cleanPath, WATER_CSS, TWITTER_CSS, ctx)`。按 fxtwitter 数据渲染自包含 HTML；`Accept: text/markdown` 时走 Markdown 分支。见 [推文服务](tweet.md)、[Markdown 转换](markdown.md)。
+`serveGithub(request, env, cleanPath, rawPathname, hljs)`。文档走 GitHub API raw + markdown-it 渲染，代码文件走 highlight.js Worker 端高亮；`rawPathname`（未 decode）用于检测 `@ref` 里的 `%2F`。见 [媒体代理与 GitHub 渲染](media-github.md)、[Markdown 转换](markdown.md)。
+
+### 2.10 `GET /<user>/status/<id>` → 推文
+
+`serveTweet(request, env, cleanPath, ctx)`。按 fxtwitter 数据渲染自包含 HTML；`Accept: text/markdown` 时走 Markdown 分支。见 [推文服务](tweet.md)、[Markdown 转换](markdown.md)。
 
 ## 3 路径预处理
 
@@ -88,10 +96,11 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 ## 4 资产注入路径
 
-`worker.js:28-31` 导入三份内联资产（`WATER_CSS`、`TWITTER_CSS`、`ARTPLAYER_JS`），`worker.js:37` 导入 `highlight.mjs`，都会作为参数下发给需要它们的下游（`video`、`tweet`、`github`），子模块不自行 import。原因：Wrangler Text module rule 要求 import 必须写在入口文件，子模块用 ESM 导入这些文本模块不可行。见 [内联资产与构建部署](assets-and-build.md)。
+`worker.js:36-38` 通过 Text module 导入三份**浏览器资产**（`artplayer.mjs`、`assets/twitter.css`、`assets/github.css`），但不再作为参数下发给下游、也不内联进页面，而是在 `/assets/` 分支外置 serve（`worker.js:121-136`）；`video.js`、`tweet.js`、`github.js` 改用 `<script src>` / `<link href>` 外链引用。`worker.js:44` 另以 `import * as HLJS` 导入 `highlight.mjs`，它作为参数传给 `serveGithub` 在 Worker 端 SSR 渲染、不下发浏览器。Wrangler Text module rule 要求 import 必须写在入口文件，子模块用 ESM 导入这些文本模块不可行。见 [外置资产与构建部署](assets-and-build.md)。
 
 ## 5 关联
 
-- 所有请求最终分成九条子服务 —— [快速上手](quickstart.md) 服务目录
+- 所有请求最终分成若干子服务 → [快速上手](quickstart.md) 服务目录
 - Telegram Bot 如何接住 /webhook → [Telegram 机器人](bot.md)
 - /github/ 的 Markdown 渲染管线 → [Markdown 转换](markdown.md)
+- /assets/ 外置资产的来源与构建 → [外置资产与构建部署](assets-and-build.md)

@@ -5,7 +5,7 @@ description: 介绍媒体代理与 GitHub 文件渲染子系统的实现细节
 tags: [媒体代理, 视频, 图片, GitHub, Range透传]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-05T11:10:10.273Z
+    at: 2026-11-10T05:42:52.452Z
 sources:
   - id: openwiki-source-68a298210d5ca78ea539a038
     resource: repo://routes/github.js
@@ -13,7 +13,7 @@ sources:
     resource: repo://routes/proxy.js
   - id: openwiki-source-e6d55ef25bd11136cefa6cc4
     resource: repo://routes/video.js
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 ---
 
 # 媒体代理与 GitHub 渲染
@@ -53,9 +53,9 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 
 ### 2.1 /vid/ 视频
 
-- `serveVideo()` 区分 `/vid/`（代理模式 → `/proxy/<encoded>`，走 Worker 缓存 + 防盗链绕过）与 `/vid/d/`（直连原始 URL，适用无防盗链场景）（`routes/video.js:51-86`）。
-- 无 URL 时返回使用说明页；有 URL 时返回 Artplayer HTML，**Artplayer JS 直接内联进 `<script>`**，自包含（`routes/video.js:88-117`）。
-- Artplayer 资产由 `worker.js` 入口 Text module 注入，`video.js` 不 import（`routes/video.js:13-15`；见 [内联资产与构建部署](assets-and-build.md) 第 1 节），便于单独测试与热替换。
+- `serveVideo()` 区分 `/vid/`（代理模式 → `/proxy/<encoded>`，走 Worker 缓存 + 防盗链绕过）与 `/vid/d/`（直连原始 URL，适用无防盗链场景）（`routes/video.js:50-86`）。
+- 无 URL 时返回使用说明页；有 URL 时返回 Artplayer HTML。播放器库通过外链 `<script src="/assets/artplayer.js" defer>` 加载（`routes/video.js:88-116`），不再内联进 `<script>`——飞书多 iframe 只下载一次。
+- Artplayer 源码由 `worker.js` Text module 导入后经 `/assets/` 分支外置 serve（见 [外置资产与构建部署](assets-and-build.md) 第 1 节），`video.js` 不 import，便于单独测试与热替换。
 
 ### 2.2 /img/ 图片
 
@@ -79,7 +79,7 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 
 `serveGithub()` 按文件类型分三路（`routes/github.js:798-856`）：
 
-- **代码文件**（扩展名映射表 `CODE_LANG` 覆盖 34 种语言，`routes/github.js:67-86`）：走 `raw.githubusercontent.com` 拉 raw 源码，Worker 端用 highlight.js `hljs.highlight()` 纯函数产出着色静态 HTML，**浏览器零 JS**。内置 15 种核心语言；其余语言按需 fetch 语言模块后注册再高亮（`highlightWith()`），缓存进同 isolate 的 `LANG_MODULE_CACHE`（`routes/github.js:364-374`）。主题 CSS（GitHub light + dark）内联到 `<style>`，`prefers-color-scheme` 自动切换。
+- **代码文件**（扩展名映射表 `CODE_LANG` 覆盖 34 种语言，`routes/github.js:67-86`）：走 `raw.githubusercontent.com` 拉 raw 源码，Worker 端用 highlight.js `hljs.highlight()` 纯函数产出着色静态 HTML，**浏览器零 JS**。内置 15 种核心语言；其余语言按需 fetch 语言模块后注册再高亮（`highlightWith()`），缓存进同 isolate 的 `LANG_MODULE_CACHE`（`routes/github.js:364-374`）。主题 CSS（GitHub light + dark）经 `/assets/github.css` 外链加载，`prefers-color-scheme` 自动切换。
 - **文档**（`.md/.rst/.org` 等，`DOC_EXTS`）：走 GitHub Contents API raw（拿 Markdown 源码）→ Worker 端 markdown-it 渲染（`lib/markdown.js`，代码块由 highlight.js 着色）→ HTMLRewriter 代理图片与媒体。
 - **目录**：GitHub 对目录返回 JSON 数组，渲染文件列表页（目录优先、文件次之、各自按名排序）。
 
@@ -108,11 +108,11 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 ## 4 /github/ 渲染细节与错误兜底
 
 - 文档页与代码页共用 `.gh-topbar` 头：左 owner / repo / path 路径、右 Watch / Star / Fork 胶囊（`renderTopbar`，`routes/github.js:415-446`）。
-- 文档路径用 `wrapDocPage` 包裹：`water.css` 基础排版 + markdown 容器约束（`markdown-body` 样式）+ highlight 主题 CSS（`routes/github.js:465-516`）。
-- 失败回退：HTMLRewriter 改写失败时降级返回原始渲染 HTML（`routes/github.js:863-869`）。
+- 文档 / 代码 / 目录页都通过外链 `<link rel="stylesheet" href="/assets/github.css">` 加载样式：`github.css` 内含裁剪后的 water 子集 + hljs 主题 + `.gh-*`（`routes/github.js:473,514,586`）。
+- 失败回退：HTMLRewriter 改写失败时降级返回原始渲染 HTML（`routes/github.js:775-781`）。
 
 ## 5 关联
 
 - Markdown 渲染的 markdown-it 管线与 Worker/highlight 分工 → [Markdown 转换](markdown.md)
-- /github/ 用到的 WATER_CSS / HLJS 资产从哪来 → [内联资产与构建部署](assets-and-build.md)
+- /github/ 用到的 /assets/github.css 与 highlight 从哪来 → [外置资产与构建部署](assets-and-build.md)
 - GitHub 链接怎么触发这些路由 → [Telegram 机器人](bot.md) 第 4 节

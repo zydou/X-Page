@@ -5,20 +5,22 @@ description: 为新读者提供 x-page 的概览、服务目录与本地开发�
 tags: [快速上手, 概览, 开发, 部署]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T03:00:20.989Z
+    at: 2026-11-10T05:42:52.452Z
 sources:
   - id: openwiki-source-8a2e26d4137b8250f68bb869
     resource: repo://build.sh
+  - id: openwiki-source-8671e0889cf4d1fe8869457d
+    resource: repo://routes/index.js
   - id: openwiki-source-1adf5eb6c74462684e873d78
     resource: repo://worker.js
   - id: openwiki-source-8f4419482b64e334cd5f4bb6
     resource: repo://wrangler.toml
-generated: { by: "claude-code", at: "2026-11-06T03:00:20.989Z" }
+generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 ---
 
 # 快速上手
 
-`x-page` 是运行在 Cloudflare Worker 上的多服务代理：一个 hostname 背后提供推文渲染、视频 / 图片代理、HTML 与微信公众号代理、GitHub README 渲染、Telegram 转换机器人。所有渲染页面的 CSS 与 JS **内联**进 HTML，不依赖浏览器端外部资源。
+`x-page` 是运行在 Cloudflare Worker 上的多服务代理：一个 hostname 背后提供推文渲染、视频 / 图片代理、HTML 与微信公众号代理、GitHub README 渲染、Telegram 转换机器人。渲染页面的浏览器 CSS / JS **外置**到 `/assets/<name>`（immutable 长缓存，飞书多 iframe 共享一份浏览器缓存），Worker 仍通过 Text module 导入这些字符串、不引用外部 origin。
 
 ## 1 定位与范围
 
@@ -28,13 +30,14 @@ generated: { by: "claude-code", at: "2026-11-06T03:00:20.989Z" }
 
 | 路径 | 服务 | 详细 |
 |---|---|---|
-| `GET /` | 使用说明页（中英双语） | [路由](routing.md) |
+| `GET /` | 302 跳转到项目 GitHub 主页 | [路由](routing.md) |
 | `GET /<user>/status/<id>[?mode=m][&lang=l]` | 推文 → 自包含 HTML / Markdown；`mode=self`、`quote`、`thread`、`all`（缺省 all） | [推文](tweet.md) |
 | `GET /vid/<url>` 与 `/vid/d/<url>` | 视频播放器 HTML（代理 / 直连） | [媒体代理与 GitHub 渲染](media-github.md) |
 | `GET /img/<url>` 与 `/img/d/<url>` | 自适应图片预览 HTML | 同上 |
 | `GET /html/<url>` | HTML 抓取 + 改写代理 | [HTML 与微信文章代理](html-wechat.md) |
 | `GET /wechat/<url>` | 微信公众号文章代理（标题回跳原文） | 同上 |
 | `GET /proxy/<url>` | 通用媒体代理 | 同上 |
+| `GET /assets/<name>` | 外置静态 CSS/JS（immutable 长缓存） | [外置资产与构建部署](assets-and-build.md) |
 | `GET /github/<user>/<repo>[/<path>]` | GitHub README / 代码文件渲染（目录列表） | 同上、[Markdown 转换](markdown.md) |
 | `POST /webhook` | Telegram bot 转换入口 | [Telegram 机器人](bot.md) |
 
@@ -85,7 +88,7 @@ curl -H "Range: bytes=0-..." https://<host>/proxy/<url>
 
 ### CI 触发路径
 
-push 到 `worker.js`、`routes/**`、`lib/**`、`twitter.css`、`wrangler.toml`、`build.sh` 都会触发 Deploy workflow，或手动 `workflow_dispatch`。
+push 到 `worker.js`、`routes/**`、`lib/**`、`assets/**`、`wrangler.toml`、`build.sh`、`deploy.yaml` 都会触发 Deploy workflow，或手动 `workflow_dispatch`。
 
 ## 5 绑定与变量
 
@@ -104,5 +107,5 @@ Telegram bot 秘密（`BOT_TOKEN`、`WEBHOOK_SECRET`、`IMGUR_CLIENTID`、`IMGBB
 ## 6 关联
 
 - 所有请求如何分发 → [路由与请求处理](routing.md)
-- 内联资产与构建过程 → [内联资产与构建部署](assets-and-build.md)
+- 内置资产与构建过程 → [外置资产与构建部署](assets-and-build.md)
 - GitHub 的 Markdown 渲染管线 → [Markdown 转换](markdown.md)

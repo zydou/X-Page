@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:c3030655ece8082ce09456a69c853754bc17bd76cb6981a8b8842ad43139cd75",
+  "pageVersion": "sha256:9b941de51d3c2b673c8f873c871ee6b99aad522cab449808d45e2030af1e9635",
   "claims": [
     {
       "id": "claim_d80fdd7959ea4571a966a79ad0050944",
-      "statement": "x-page 由 worker.js 单入口分发九条子服务，推文路由为兜底。",
+      "statement": "x-page 由 worker.js 单入口按优先级分发各子服务（根 302、favicon、webhook、vid、img、html、wechat、proxy、assets、github），推文路由为兜底。",
       "evidence": [
         {
-          "resource": "repo://worker.js",
-          "version": "repo-file-v1:sha256:ab0750a3b5dd7fb77e3a2255c1aef9c4d9c33cbc8d17e6519467b80e452d6851"
+          "resource": "repo://worker.js#L79-L145",
+          "version": "repo-lines-v1:sha256:cedf15c68c99fbf600e0b6127ff13523a5870ef453c5a7e95d4f3fa2bf894a4a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4YmQ2M2IxMzI4YmFjNmJjMmU0Zjg1OTNkODVmODYxZjFkMDg3Njc4YWI2OThiNmM1NmE2ZDI0N2RkN2EzNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNWNkMmZiNGYzZGY4ODQ1MTUyNTViMzk1MjNmMmY4YjU0NzJiZWVhOWY1NjZmZmNhMjA0ZGI4MDI1NjEwNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4ZDliMmU2YTUwN2YzZjU5NGNhOTlhYjQzNzhjNmJkY2VjNjA2YjVhZGVkZjc2M2FmZWFmMzc2YTkyZGMzMzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAifQ"
         }
       ]
     },
@@ -28,7 +28,7 @@
       "evidence": [
         {
           "resource": "repo://build.sh",
-          "version": "repo-file-v1:sha256:b40819e2db0bbde12769d4d9469aa527cdff69c6608512808aa0baa7d888ab0b"
+          "version": "repo-file-v1:sha256:47db12e2eed8d19df67c58338494636afbf9e58da079a43cb22e4e65e79cfe43"
         }
       ]
     },
@@ -51,10 +51,20 @@
           "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
         }
       ]
+    },
+    {
+      "id": "claim_3153bafa86134911a80a5c01ba3b7c42",
+      "statement": "GET / 由 routes/index.js 返回 302 跳转到 github.com/zydou/X-Page，不再是用量说明页。",
+      "evidence": [
+        {
+          "resource": "repo://routes/index.js#L8-L21",
+          "version": "repo-lines-v1:sha256:a8289c23f92b5fb9b5bfcabd770113229ce096f21e7b86c225617bc79f279fa0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyMTBkYjY4ODZlNWM4NjkzNThjMGI5MDY0ZTNmNzY3OGIwOWFhMTY2NmVmNzYxY2M4ZjM1YWFmMmFlMTM5NmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhYzdlNDY5ZjEzZTIzZmQ0Yzc3OWE2NDVkMTY4NzA3OWRhOGQxNzI1MzJmMDRhNjhlMzBjM2VmY2Q1MGZkODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-06T03:00:20.989Z"
+    "at": "2026-11-10T05:42:52.452Z"
   }
 }

@@ -9,13 +9,14 @@ Multi-file ES Module: `worker.js` is the router, each service lives in `routes/`
 x-page/
 ├── worker.js                # entry point: imports assets + dispatches routes
 ├── routes/
-│   ├── index.js             # / → usage page
+│   ├── index.js             # / → 302 redirect to GitHub repo
 │   ├── proxy.js             # /proxy/<url> → generic media proxy
 │   ├── video.js             # /vid/<url> and /vid/d/<url> → Artplayer HTML
 │   ├── image.js             # /img/<url> and /img/d/<url> → image viewer HTML
 │   ├── html.js              # /html/<url> → HTML fetch + rewrite
 │   ├── wechat.js            # /wechat/<url> → WeChat article HTML
 │   ├── tweet.js             # /<user>/status/<id>[?mode=][&lang=] → tweet HTML
+│   ├── github.js            # /github/<user>/<repo>[/<path>] → README/file/dir HTML
 │   └── webhook.js           # POST /webhook → Telegram bot（X-Page 链接转换）
 ├── lib/
 │   ├── utils.js             # shared pure functions (proxyUrl, formatDate, parseMedia, etc.)
@@ -26,10 +27,15 @@ x-page/
 │       ├── matcher.js       # 纯函数：链接识别 + X-Page 链接生成
 │       ├── telegram.js      # Telegram Bot API 客户端
 │       └── media.js         # 媒体下载 → 图床上传
+├── assets/
+│   ├── twitter.css          # tweet styles (trimmed water subset + twitter rules), served at /assets/
+│   └── github.css           # github styles (trimmed water subset + hljs theme + .gh-*), served at /assets/
 ├── wrangler.toml            # service config, env vars, observability, Text module rules
-├── water.css                # base styles for tweet HTML (CI-fetched, Text-module inlined)
-├── twitter.css              # tweet-specific overrides (Text-module inlined)
-├── artplayer.js             # Artplayer source (CI-fetched + esbuild minified)
+├── wrangler.dev.toml        # debug-worker config (x-dev)
+├── build.sh                 # CI/dev build: fetch + build remote JS assets
+├── artplayer.mjs            # CI-generated ESM string from artplayer.js (built by build.sh)
+├── markdown-it.mjs          # CI-built markdown-it bundle (Worker-side SSR only)
+├── highlight.mjs            # CI-built highlight.js bundle (Worker-side SSR only)
 ├── README.md                # end-user-facing docs (Chinese)
 └── .github/workflows/deploy.yaml
 ```
@@ -47,12 +53,13 @@ x-page/
 | `/wechat/<raw-url>`              | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
 | `/proxy/<raw-url>`               | Generic passthrough proxy; rewrites JS/CSS relative URLs |
 | `/github/<user>/<repo>[/<path>]` | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
+| `/assets/<name>` | Externalized browser CSS/JS (`twitter.css` / `github.css` / `artplayer.js`), `Cache-Control: immutable` 1 年 |
 | `/webhook`                       | Telegram bot webhook（POST，校验 `X-Telegram-Bot-Api-Secret-Token`；其余请求 403） |
-| `/`                              | Unified usage page (zh/en) |
+| `/`                              | 302 redirect to the GitHub repo |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
-Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/wechat/` → `/proxy/` → `/github/` → tweet (fallback) → 404.
+Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/wechat/` → `/proxy/` → `/assets/` → `/github/` → tweet (fallback) → 404.
 
 ### /html/ rewrite rules
 
@@ -137,10 +144,10 @@ the browser.
 
 ### CI Pipeline (`.github/workflows/deploy.yaml`)
 
-1. `npx wrangler deploy` — Wrangler runs the `[build]` command (`sh build.sh`) first, which downloads and builds all remote assets (markdown-it, highlight.js), then deploys. `assets/*.css` are committed to the repo and not rebuilt.
+1. `npx wrangler deploy` — Wrangler runs the `[build]` command (`sh build.sh`) first, which downloads and builds all remote assets (artplayer, markdown-it, highlight.js), then deploys. `assets/*.css` are committed to the repo and not rebuilt.
 2. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
 
-Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `assets/**`, `wrangler.toml`, `deploy.yaml`; or `workflow_dispatch`.
+Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `assets/**`, `wrangler.toml`, `build.sh`, `deploy.yaml`; or `workflow_dispatch`.
 
 ## Vars
 
@@ -148,6 +155,7 @@ Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `assets/**`, `wrangle
 | -------------- | ------- |
 | `TIMEZONE`     | Tweet timestamp display timezone |
 | `TWITTER_LANG` | BCP-47 language for tweet translation; blank = original. `?lang=` on the URL overrides it |
+| `TWITTER_PREWARM_LANGS` | Comma-separated BCP-47 list the Telegram bot prewarms (`tweet/<id>.<lang>.json` per language); blank = fall back to `TWITTER_LANG`. Bot prewarm only, does not affect `serveTweet` default rendering |
 | `GITHUB_TOKEN` | Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
 | `UA`           | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 
@@ -238,7 +246,7 @@ fallthrough = true
 rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
 ```
 
-**踩坑症状**：wrangler 部署时打印 `Unexpected fields found in r2_buckets[0] field: "rules"`，CSS/其他 Text 模块没被打包，Worker 里 `import WATER_CSS from "./water.css"` 拿到的是空对象，HTML `<style>` 标签里直接渲染成 `[object Object]` 字符串 —— 页面布局完全乱掉。
+**踩坑症状**：wrangler 部署时打印 `Unexpected fields found in r2_buckets[0] field: "rules"`，CSS/其他 Text 模块没被打包，Worker 里 `import TWITTER_CSS from "./assets/twitter.css"` 拿到的是空对象，`/assets/` 返回的 CSS 直接渲染成 `[object Object]` 字符串 —— 页面样式完全丢掉。
 
 **为什么裸形式有时能用**：TOML 规定紧跟 `[[array]]` 项后、未被更上一级 `[table]` 切分前，裸字段都属于那个数组项。当 `wrangler.toml` 只有一个 `rules = [...]` 而没有其他 `[[xxx]]` 块时，它属于顶层 worker-config 表，能正常工作；**一旦加上 `[[r2_buckets]]` 等块且顺序在 rules 之前/之后无 `[table]` 切分，rules 就被吞掉**。
 

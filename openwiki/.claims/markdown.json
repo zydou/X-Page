@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:43176713f5868685dcaa8dbd034913e2d7918810b0e85308d0713a96f90e1634",
+  "pageVersion": "sha256:d63908ef98ca56c419c859223011884295992680bbe2f7fff5e57cee8f286eda",
   "claims": [
     {
       "id": "claim_a1c92053a85846869dc5e91a6985defb",
@@ -71,10 +71,24 @@
           "version": "repo-file-v1:sha256:2908d69c15b194cb02d58c76446867b29d2b3f862f696670ecee0b60ad8476d9"
         }
       ]
+    },
+    {
+      "id": "claim_4ea9758d97834664942d2eabbf96ddbd",
+      "statement": "markdown-it.mjs 与 highlight.mjs 是 Worker 端 SSR 专用、不下发浏览器：Worker 里把 markdown/代码渲染成成品 HTML，浏览器零 JS；与外置到 /assets/ 的浏览器资产（twitter.css/github.css/artplayer.js）职责分明。",
+      "evidence": [
+        {
+          "resource": "repo://build.sh#L21-L38",
+          "version": "repo-lines-v1:sha256:68765be93da2b175d30174fba3834dbc4706bb94c52bdbf069b1d2830d21445b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1ZWQ5ZmUxNzE5ZThjZDYxYjEwODQzZjFkMzUwOGEwODBmYzRlYTcyMjY2MGY4NTU1MTRmMDQzNjkyNTg5Y2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NjlkMjM3Y2Q0MjBiOWQzOGI5ODFhMGE0ZjY3NzAxOTBhNGE4M2RjYTFmZTU2YzRmNWJhMWUyY2JjMGVmNzYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE2ZTMyM2JmNzhmYjg3NzkwMzAyMGNhNzhjY2FiMDMzOTkyYTBmMWZkNjg0Yjk5MWE5NThjNDQxYmU4MDZjZDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhjYWNlZjBhZDgwMTU1M2U5ZjM3ODAxODY2YTFkNWEwMmU4OTgxYWY1NmFmMmY4OTEwNjE2OWI3YWVjYmJhMjkifQ"
+        },
+        {
+          "resource": "repo://lib/markdown.js#L18-L18",
+          "version": "repo-lines-v1:sha256:2866dba08730a559e324348089777c586efac991bab466bcc8adc931349ef4c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg2NmRiYTA4NzMwYTU1OWUzMjQzNDgwODk3NzdjNTg2ZWZhYzk5MWJhYjQ2NmJjYzhhZGM5MzEzNDllZjRjOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg2NmRiYTA4NzMwYTU1OWUzMjQzNDgwODk3NzdjNTg2ZWZhYzk5MWJhYjQ2NmJjYzhhZGM5MzEzNDllZjRjOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmFjN2U0NjlmMTNlMjNmZDRjNzc5YTY0NWQxNjg3MDc5ZGE4ZDE3MjUzMmYwNGE2OGUzMGMzZWZjZDUwZmQ4NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2ZkMGVkODQzNDUwNjU0MWQ4NzBlMTNjYzY3MjcxOTU1NDU4OWFkZmNkMWI0NDY0OGMzY2MyYmNmNzU4MDM4NiJ9"
+        }
+      ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-05T11:10:10.273Z"
+    "at": "2026-11-10T05:42:52.452Z"
   }
 }

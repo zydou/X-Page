@@ -5,24 +5,24 @@ description: 阐明推文渲染的数据源、翻译与缓存策略，以及自�
 tags: [推文, Twitter, fxtwitter, 翻译, R2缓存]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T03:00:20.989Z
+    at: 2026-11-10T05:42:52.452Z
 sources:
   - id: openwiki-source-51d8dc0d173d42237cb85fda
     resource: repo://lib/thread.js
   - id: openwiki-source-7e7c48b6dbe712bdc9057f3a
     resource: repo://routes/tweet.js
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 ---
 
 # 推文服务
 
-`/<user>/status/<id>[?mode=m][&lang=l]` 是 x-page 的主力路由：把 X / Twitter 推文渲染成完全自包含的 HTML（内联 water.css + twitter.css），供嵌入环境直接呈现。
+`/<user>/status/<id>[?mode=m][&lang=l]` 是 x-page 的主力路由：把 X / Twitter 推文渲染成完全自包含的 HTML（样式经 `<link rel="stylesheet" href="/assets/twitter.css">` 外链加载，`twitter.css` 内含裁剪后的 water 子集 + 推文专属覆盖），供嵌入环境直接呈现。
 
 数据来源是 **fxtwitter**（非官方镜像，对 X API 的 Thread 数据做了友好封装）。翻译挂在 fxtwitter 端，x-page 只负责渲染、缓存与自推链补全。
 
 ## 1 数据流与缓存
 
-请求管线（`routes/tweet.js:630-698`）：
+请求管线（`routes/tweet.js:620-688`）：
 
 1. `extractPid()` 从路径提取 ID；不匹配直接 404。
 2. `parseMode()` 决定 `mode`（缺省即 `all`；非法值回退 `all`）。
@@ -41,8 +41,8 @@ generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
 
 ### 1.2 翻译：`TWITTER_LANG` 与 `?lang=`
 
-- 查询 `?lang=` 优先于 `TWITTER_LANG` 环境变量；两者都缺省则不翻译，fxtwitter 返回原文（`routes/tweet.js:635`）。
-- **R2 key 带语言维度**：`tweet/<id>.<lang>.json`（无翻译时 `tweet/<id>.json`）。不同语言各存一份——`?lang=ja` 不会命中 `?lang=zh-cn` 缓存（`routes/tweet.js:708-711`）。
+- 查询 `?lang=` 优先于 `TWITTER_LANG` 环境变量；两者都缺省则不翻译，fxtwitter 返回原文（`routes/tweet.js:625`）。
+- **R2 key 带语言维度**：`tweet/<id>.<lang>.json`（无翻译时 `tweet/<id>.json`）。不同语言各存一份——`?lang=ja` 不会命中 `?lang=zh-cn` 缓存（`routes/tweet.js:717-718`）。
 - lang 原样透传给 fxtwitter（`/2/thread/<id>?lang=<lang>`），译文由 `translation` 字段返回。
 
 ### 1.3 R2 缓存
@@ -86,7 +86,7 @@ thread 中没有父节点的活推文，取最早的一条（按 `created_timest
 
 ### 2.6 `?refresh_button=0`
 
-页面上的「强制刷新」按钮通过 `?refresh_button=0` 隐藏（`routes/tweet.js:637`）；生成刷新 URL 时保留 `mode` 与 `lang`，避免点刷新后跳回默认（`routes/tweet.js:639-641`）。
+页面上的「强制刷新」按钮通过 `?refresh_button=0` 隐藏（`routes/tweet.js:627`）；生成刷新 URL 时保留 `mode` 与 `lang`，避免点刷新后跳回默认（`routes/tweet.js:629-631`）。
 
 ## 3 关联
 

@@ -1,16 +1,18 @@
 ---
 type: 子系统
-title: 内联资产与构建部署
-description: 自包含 HTML 的内联资产策略、构建脚本与 CI 部署流水线
-tags: [构建部署, 内联资产, CI, Cloudflare Workers]
+title: 外置资产与构建部署
+description: 自包含渲染的外置 /assets/ 资产策略（immutable 长缓存）、build.sh 构建脚本与 CI 部署流水线
+tags: [构建部署, 外置资产, CI, Cloudflare Workers]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-06T03:00:20.989Z
+    at: 2026-11-10T05:42:52.452Z
 sources:
   - id: openwiki-source-d8b6488c252ba22fd6c0f6dc
     resource: repo://.github/workflows/deploy.yaml
   - id: openwiki-source-8a2e26d4137b8250f68bb869
     resource: repo://build.sh
+  - id: openwiki-source-4cc5b54b5fc77565a9fc3760
+    resource: repo://lib/markdown.js
   - id: openwiki-source-68a298210d5ca78ea539a038
     resource: repo://routes/github.js
   - id: openwiki-source-e6d55ef25bd11136cefa6cc4
@@ -19,59 +21,76 @@ sources:
     resource: repo://worker.js
   - id: openwiki-source-8f4419482b64e334cd5f4bb6
     resource: repo://wrangler.toml
-generated: { by: "claude-code", at: "2026-11-05T11:10:10.273Z" }
+generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 ---
 
-# 内联资产与构建部署
+# 外置资产与构建部署
 
-本页说明 x-page 如何把所有前端资源内联进自己渲染的 HTML——零外部引用、浏览器零加载 Worker 外资源——以及 `build.sh` 与 CI 流水线如何保证这些资产在部署的 Worker 中可用。部署前请先看 [快速上手](quickstart.md) 的部署一节。
+本页说明 x-page 如何把浏览器可见的 CSS / JS **外置**到 `/assets/<name>`（带 1 年 immutable 缓存），让飞书文档里几十个 iframe 共享一份浏览器 HTTP 缓存，而不是每个 iframe 各自重新下载；以及 `build.sh` 与 CI 流水线如何保证这些资产在部署的 Worker 中可用。部署前请先看 [快速上手](quickstart.md) 的部署一节。
 
-## 1 内联资产：WATER_CSS / TWITTER_CSS / ARTPLAYER_JS / HLJS
+## 1 资产策略：外置 /assets/ 而非内联
 
 > [!NOTE]
-> `worker.js:27-31` 导入三份资产并作为参数下发，下游 `video.js`、`tweet.js`、`github.js` 均不自行 import。原因：Wrangler Text module rule 要求 import 必须写在入口文件，子模块用 ESM 导入这些文本模块不可行。
+> 历史行为是「所有 CSS / JS 内联进渲染 HTML」。commit `a8b397f` 改为外置：Worker 仍通过 Text module 把 CSS / JS 作为字符串导入（`worker.js:36-38`），但不再拼进每个页面的 `<style>` / `<script>`，而是在 `/assets/` 分支统一 serve（`worker.js:121-136`）。原因见第 1.4 节。
 
-### 1.1 WATER_CSS 与 TWITTER_CSS
+### 1.1 Worker 导入三份 Text module
 
-- **来源**：`water.css` 由 CI / `build.sh` 从 jsdelivr 的 `water.css@2/out/water.min.css` 拉取（`build.sh:9`）；`twitter.css` 是仓库内手写文件，只写推文专属覆盖样式，不被 build 脚本改动。
-- **机制**：Wrangler Text module rule（见 `wrangler.toml:15-18` 的 `[[rules]]`）把 `.css` 当纯文本字符串 import 入 `worker.js`，再作为参数注入 `<style>` 标签。不走 `[assets]` 或任何 CDN 引用。
-- **注入位置**：`tweet.js` 的 `renderTweetMarkdown()` 拼 `<style>` 时写 `${WATER_CSS}`；`github.js` 的 `renderRepoHtml()` / `renderDirListing()` 一并注入 `WATER_CSS` 与 `HLJS_THEME_CSS`（`routes/github.js:192-193,375-376`）；`video.js` 同样把 `WATER_CSS` 与 `HLJS_THEME_CSS` 写入 `<style>`（`routes/video.js:206-207`）。
+`worker.js:36-38` 通过 wrangler Text module rule 把三份浏览器资产作为字符串导入：
 
-### 1.2 ARTPLAYER_JS
+- `artplayer.mjs` → `ARTPLAYER_JS`（`export default "<JSON 转义源码>"`）
+- `assets/twitter.css` → `TWITTER_CSS`
+- `assets/github.css` → `GITHUB_CSS`
 
-- **来源**：CI / build 时从 jsdelivr 的 `artplayer/dist/artplayer.js` 下载（`build.sh:26`），**禁止用 `esbuild` minify**——minified 源码含反引号 / `${}`，若用 esbuild 压缩后以模板字面量注入，运行时变量展开必出错。正确做法是 `export default JSON.stringify(src)` 包装。
-- **现状**：仓库内 `artplayer.mjs` 就是 `build.sh:29-31` 产出的 `export default "..."` 单行文件，`worker.js:28` import 后作为参数传给 `serveVideo`，`video.js` 模板中 `${ARTPLAYER_JS}` 注入 `<script>`。
+`worker.js:44` 另外以 `import * as HLJS` 导入 `highlight.mjs`，但它是 Worker 端 SSR 渲染用的命名空间，**不下发浏览器**。
 
-### 1.3 HLJS（Worker 端代码高亮）
+### 1.2 /assets/ 分支外置 serve
 
-- **产物**：`highlight.mjs` 是 `build.sh:54-75` 打出来的 `highlight.js 11.10.0` core + 15 种内置语言模块 + GitHub 主题 CSS（亮 + 暗两版经 `prefers-color-scheme` 合并），暴露 `highlightCode()` / `highlightWith()` / `BUILTIN_LANGS` / `HLJS_THEME_CSS` 四个具名导出。
-- **注入**：`worker.js:37` 以 `import * as HLJS` 拿到后作为参数传给 `serveGithub`；`routes/github.js:150-173` 的 `renderCodeHtml()` 在 **Worker 端**调 `HLJS.highlightCode()` / `highlightWith()` 把 Markdown 代码块渲染成静态 HTML，浏览器零 JS 成本。
+`worker.js:121-136` 匹配 `assets/` 前缀，按文件名从导入的字符串里取 body，返回时带 `Cache-Control: public, max-age=31556952, immutable`：
 
-### 1.4 为什么坚持「内联」
+| 请求路径 | body 来源 | Content-Type |
+|---|---|---|
+| `/assets/twitter.css` | `TWITTER_CSS` | `text/css; charset=utf-8` |
+| `/assets/github.css` | `GITHUB_CSS` | `text/css; charset=utf-8` |
+| `/assets/artplayer.js` | `ARTPLAYER_JS` | `text/javascript; charset=utf-8` |
 
-CLAUDE.md 的 Style Conventions 明写：所有消费者供给的资产必须内联进模板，**禁止在渲染 HTML 中引用外部 origin**。万一将来要新增 CSS 或 JS，先判断它是否够「简单」到值得引入构建管线，否则内联字符串是更小、更可控的选择。
+未命中的资产名返回 404。下游路由用**外链**引用这些资产，不再内联：
+
+- `routes/video.js:98` 用 `<script src="/assets/artplayer.js" defer>` 加载播放器库；
+- `routes/github.js:473,514,586` 用 `<link rel="stylesheet" href="/assets/github.css">` 加载文档 / 代码 / 目录页样式（`github.css` 内含裁剪后的 water 子集 + hljs 主题 + `.gh-*`）；
+- `routes/tweet.js` 的 `wrapHtml()`（`tweet.js:420-431`）用 `<link rel="stylesheet" href="/assets/twitter.css">` 加载推文样式。
+
+### 1.3 两类资产的分界
+
+- **浏览器资产**（`/assets/` 外置）：`twitter.css`、`github.css`、`artplayer.mjs`。特点是同一个大文档里会出现 N 次，外置后靠浏览器 HTTP 缓存只下载一次。
+- **Worker 端 SSR 资产**（不下发浏览器）：`markdown-it.mjs`、`highlight.mjs`。它们只在 Worker 里把 markdown / 源码渲染成静态 HTML，浏览器拿到的已是着色好的 `<span>`，零 JS 成本。
+
+### 1.4 为什么从内联改为外置
+
+内联的好处是「页面完全自包含、不受混合内容拦截」；代价是飞书文档里几十个推文 / 仓库 iframe 各自携带一整份 CSS / JS 副本，重复下载 N 次。外置到 `/assets/` 后，同域 + immutable 长缓存让 N 个 iframe 共享一份浏览器缓存。Worker 仍通过 Text module 导入这些字符串（而非引用外部 origin），所以既满足 CLAUDE.md「渲染 HTML 不得引用外部 origin」的约束，又拿到了缓存复用。
 
 ## 2 构建脚本：build.sh
 
-执行 `sh build.sh` 依次做四件事，均为**幂等跳过**（文件已存在即跳过下载，保留本地手工改动）：
+`sh build.sh` 依次做四步，前三步**幂等跳过**（产物已存在即跳过下载 / 构建），第四步只做存在性校验：
 
-1. **CSS**：拉 `water.css`（jsdelivr），esbuild minify（`--legal-comments=none --drop:console --drop:debugger`）；CI=true 时也会 minify `twitter.css`，本地 dev 只压 `water.css`（`build.sh:12-18`，本地跳过的原因是避免本地覆盖手工改好的 twitter.css）。
-2. **Artplayer**：拉 `artplayer.js`（jsdelivr），`JSON.stringify` 包装成 `artplayer.mjs`（`build.sh:25-33`）。
-3. **markdown-it**：`npm install markdown-it@14.1.0` → esbuild bundle `--format=esm --platform=node --minify` → 把 `export{Rt as default}` 重写成 `export const MarkdownIt = Rt`，产出 `markdown-it.mjs`（`build.sh:38-51`）。本地 `/github/` 的 Markdown 渲染由这个 bundle 支撑，见 [Markdown 转换](markdown.md)。
-4. **highlight.js**：下载 core + 15 种语言 min.js 与 GitHub 主题 CSS，拼接成 `highlight.mjs`（`build.sh:54-75`）；最后 `sed` 剥掉 `&&(module.exports=hljs)` 免去 wrangler ESM 警告。
+1. **artplayer.mjs**（`build.sh:6-19`）：从 jsdelivr 拉 `artplayer/dist/artplayer.js`，用 `node -e` 读源码、`JSON.stringify` 包装成 `export default "..."` 单行写入 `artplayer.mjs`（`build.sh:16`）。**禁止 esbuild minify**——压缩后的源码含反引号 `` ` `` 与占位符 `${`，若以模板字面量注入会被 JS 引擎错误解析；先 `JSON.stringify` 成字符串字面量再作 ESM 默认导出即可安全内联。
+2. **markdown-it.mjs**（`build.sh:21-38`）：`npm install markdown-it@14.1.0 --no-save` → `esbuild --bundle --format=esm --platform=node --minify` 打成自包含 ESM（`build.sh:26-29`）→ 把 `export{Rt as default}` 重写为 `export const MarkdownIt = Rt`（`build.sh:30-35`），因为它原本以 CommonJS 默认导出为主。给 [Markdown 转换](markdown.md) 的 `/github/` 渲染用。
+3. **highlight.mjs**（`build.sh:40-66`）：下载 highlight.js `11.10.0` core + 15 种内置语言 min.js + GitHub 亮 / 暗主题 CSS，拼接成单文件 ESM（`build.sh:54-61`），暴露 `highlightCode()` / `highlightWith()` / `BUILTIN_LANGS` / `HLJS_THEME_CSS` 四个具名导出；亮暗两版主题用 `@media (prefers-color-scheme: dark)` 合并。最后 `sed` 剥掉 `&&(module.exports=hljs)` 免去 wrangler ESM 警告（`build.sh:64-65`）。
+4. **assets/github.css 校验**（`build.sh:68-75`）：`assets/github.css` 已提交进仓库（内含裁剪 water 子集 + hljs 主题 + `.gh-*`），脚本只检查它存在，缺失则告警，**不重新生成**。hljs 主题升级时需手工重新合并。
 
 > [!WARNING]
-> 步骤 3 / 4 拿完产物后会 `rm -rf node_modules package.json package-lock.json` 清理中间文件（`build.sh:51,137`）。这是本仓库没包管理器、没 node_modules 的前提——CI 跑完 Wrangler 部署就走人。
+> 步骤 2 拿完产物后会 `rm -rf node_modules package.json package-lock.json`（`build.sh:36`），步骤结束统一 `rm -f` 中间文件、`rm -rf build/`（`build.sh:78-80`）。这是本仓库没包管理器、没 node_modules 的前提——CI 跑完 Wrangler 部署就走人。
+
+**注意**：`assets/twitter.css` 与 `assets/github.css` 已提交进仓库、**不被 build.sh 改动**；旧的根目录 `water.css` 拉取 / minify 步骤已随外置重构移除。
 
 ## 3 CI 部署流水线
 
-`.github/workflows/deploy.yaml` 单 job `deploy`（ubuntu-latest，10 分钟超时），触发条件是 push 到 `worker.js`、`routes/**`、`lib/**`、`twitter.css`、`wrangler.toml`、`build.sh`、或 `workflow_dispatch`。
+`.github/workflows/deploy.yaml` 单 job `deploy`（ubuntu-latest，10 分钟超时），触发条件是 push 到 `worker.js`、`routes/**`、`lib/**`、`assets/**`、`wrangler.toml`、`build.sh`、`deploy.yaml`，或手动 `workflow_dispatch`。
 
-- **步骤一**：`npx wrangler deploy`。Wrangler 先执行 `wrangler.toml:23-24` 的 `[build].command = "sh build.sh"`，把远端资产全部下载好的前提下部署。
-- **步骤二：重开 Worker Cache**。Wrangler deploy 会把 Worker Cache 运行时开关重置为默认（禁用）。CI 用 `CF_API_TOKEN` 调 Account API `/workers/scripts/{name}/settings` 重新 PATCH `settings={"cache_options":{"enabled":true}}`（需 token 具备 Workers Scripts:Edit 权限）。注释里明确说明用 `--config wrangler.dev.toml` 的调试 Worker **不要开这个设置**，免得开发 Worker 和生产 Worker 接管同一 question 缓存键。
+- **步骤一**（`deploy.yaml:27`）：`npx wrangler deploy`。Wrangler 先执行 `wrangler.toml` 的 `[build].command = "sh build.sh"`，把远端资产全部构建好再部署。
+- **步骤二：重开 Worker Cache**（`deploy.yaml:33-48`）。Wrangler deploy 会把 Worker Cache 运行时开关重置为默认（禁用）。CI 用 `CF_API_TOKEN` 调 Account API `/workers/scripts/{name}/settings` 重新 PATCH `settings={"cache_options":{"enabled":true}}`（`deploy.yaml:47`，需 token 具备 Workers Scripts:Edit 权限），并校验响应里 `cache_options.enabled` 为 true 否则退出非零。
 
 > [!TIP]
-> **不要等 GitHub Actions 绿灯**。CLAUDE.md 明说 Deploy workflow 经常排队数分钟，正确的验证方式是直接在终端跑 `npx wrangler deploy`（先 dev 后 prod），再 curl 验证每条路由：`/html/`、`/wechat/`、Range 透传等。
+> **不要等 GitHub Actions 绿灯**。CLAUDE.md 明说 Deploy workflow 经常排队数分钟，正确的验证方式是直接在终端跑 `npx wrangler deploy`（先 dev 后 prod），再 curl 验证每条路由：`/html/`、`/wechat/`、Range 透传等。CI 的价值是 push 时自动发布 + supply 链兜底。
 
 ## 4 wrangler.toml module rules 必须用 `[[rules]]` 数组表头
 
@@ -84,7 +103,7 @@ CLAUDE.md 的 Style Conventions 明写：所有消费者供给的资产必须内
 rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
 ```
 
-wrangler 部署时打印 `Unexpected fields found in r2_buckets[0] field: "rules"`，CSS / 其它 Text 模块没打进 bundle，Worker 里 `import WATER_CSS from "./water.css"` 拿到的是**空对象**，最终 HTML `<style>` 里被渲染成字面量字符串 `[object Object]`——页面布局全乱。
+wrangler 部署时打印 `Unexpected fields found in r2_buckets[0] field: "rules"`，CSS / 其它 Text 模块没打进 bundle，Worker 里 `import TWITTER_CSS from "./assets/twitter.css"` 拿到的是**空对象**，`/assets/` 返回的 CSS 变成字面量 `[object Object]`——页面样式全丢。
 
 ### 4.2 正确写法
 
@@ -98,7 +117,7 @@ globs = ["**/*.css"]
 fallthrough = true
 ```
 
-本仓库 `wrangler.toml:13-18` 就是这个写法，排在 `[[r2_buckets]]` 之前。任何时候在文件里加 `[[r2_buckets]]` / `[[kv_namespaces]]` 等其它 `[[array]]` 块都要保持这个顺序，并以 `[[rules]]` 开头，而非裸字段。
+本仓库 `wrangler.toml` 就是这个写法，排在 `[[r2_buckets]]` 之前。任何时候在文件里加 `[[r2_buckets]]` / `[[kv_namespaces]]` 等其它 `[[array]]` 块都要保持这个顺序，并以 `[[rules]]` 开头，而非裸字段。
 
 ### 4.3 为什么裸形式偶尔能跑
 
@@ -106,21 +125,22 @@ TOML 规范规定：紧跟 `[[array]]` 项之后、未被更上层 `[table]` 切
 
 ### 4.4 验证手段
 
-部署后 `curl` 任意一条路由，看返回 HTML `<head>` 的 `<style>` 里面是真实 CSS 还是 `[object Object]`。是后者说明 rules 被吞了，去查 TOML 顺序。
+部署后 `curl https://<host>/assets/twitter.css`，看返回的是真实 CSS 还是 `[object Object]`。是后者说明 rules 被吞了，去查 TOML 顺序。
 
 ## 5 部署与验证清单
 
 | 步骤 | 命令 |
 |---|---|
-| 本地快速验证 | `npx wrangler dev` 后 curl 各路由前缀 |
+| 本地快速验证 | `sh build.sh` 后 `npx wrangler dev`，curl 各路由前缀与 `/assets/twitter.css` |
 | dev 部署 | 复制 `wrangler.toml` → `wrangler.dev.toml`，改 `name="x-dev"` 与 dev hostname，`npx wrangler deploy --config wrangler.dev.toml` |
 | prod 部署 | `npx wrangler deploy` |
-| 验证 | `curl https://<host>/html/<url>`、`/wechat/<url>`、`curl -H "Range: bytes=0-..." /proxy/<url>` 检查 range 透传 |
+| 验证 | `curl https://<host>/assets/twitter.css` 看 CSS 是否真实；`/html/<url>`、`/wechat/<url>`、`curl -H "Range: bytes=0-..." /proxy/<url>` 检查 range 透传 |
 
-触发 CI 部署的 push 路径已在 CI yaml 列出，但手动部署同样能走通整条管线——CI 存在的价值是给 supply 链兜底 + push 时自动发布生产 Worker。
+触发 CI 部署的 push 路径已在 CI yaml 列出，但手动部署同样能走通整条管线。
 
 ## 6 关联
 
-- 路由如何分发这些资产 → [路由与请求处理](routing.md)
+- 路由如何分发请求与 `/assets/` 分支的位置 → [路由与请求处理](routing.md)
 - Markdown 渲染管线（markdown-it.mjs / highlight.mjs）为什么走 Worker 端 → [Markdown 转换](markdown.md)
-- GitHub README 渲染如何消费 WATER_CSS 与 HLJS → [媒体代理与 GitHub 渲染](media-github.md)
+- `/github/` 如何消费 `/assets/github.css` 与 highlight → [媒体代理与 GitHub 渲染](media-github.md)
+- 推文页如何消费 `/assets/twitter.css` → [推文服务](tweet.md)
