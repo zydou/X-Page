@@ -5,7 +5,7 @@ description: 介绍媒体代理与 GitHub 文件渲染子系统的实现细节
 tags: [媒体代理, 视频, 图片, GitHub, Range透传]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T05:42:52.452Z
+    at: 2026-11-10T10:39:10.208Z
 sources:
   - id: openwiki-source-68a298210d5ca78ea539a038
     resource: repo://routes/github.js
@@ -13,7 +13,7 @@ sources:
     resource: repo://routes/proxy.js
   - id: openwiki-source-e6d55ef25bd11136cefa6cc4
     resource: repo://routes/video.js
-generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
+generated: { by: "claude-code", at: "2026-11-10T10:39:10.208Z" }
 ---
 
 # 媒体代理与 GitHub 渲染
@@ -27,7 +27,8 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 ### 1.1 Range 透传与缓存头
 
 - **透传 Range**：请求带 `Range` 头时原样转发给上游——视频拖拽播放必需（`routes/proxy.js:58-61`）。
-- **CDN 缓存**：`cf: { cacheTtl: 31556952, cacheEverything: true }` 声明响应可进边缘缓存，缓存键 = 完整 URL + vary 头（`routes/proxy.js:63-70`）。下游写死 1 年 immutable 缓存，基于内容 hash 的媒体 URL 一旦写入就不变（`routes/proxy.js:91`）。
+- **CDN 缓存**：`cf: { cacheTtl: 31556952, cacheEverything: true }` 声明响应可进边缘缓存，缓存键 = 完整 URL + vary 头（`routes/proxy.js:63-70`）。下游写死 1 年 immutable 缓存，基于内容 hash 的媒体 URL
+  一旦写入就不变（`routes/proxy.js:91`）。
 - **Content-Disposition 覆盖**：强制 `inline`，上游若返回 `attachment` 也会被盖成内联展示（`routes/proxy.js:93`）。
 - **CORS**：`access-control-allow-origin: *` 放宽跨子域，让 HTML 内 `<img>` / `<video>` 能呈现。
 - **不设 platform fetch 超时**：大视频回源慢时让 Cloudflare 自带约 100s 超时兜底，自己不抢跑，避免误杀慢速合法源（`routes/proxy.js:27-28`）。
@@ -54,7 +55,9 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 ### 2.1 /vid/ 视频
 
 - `serveVideo()` 区分 `/vid/`（代理模式 → `/proxy/<encoded>`，走 Worker 缓存 + 防盗链绕过）与 `/vid/d/`（直连原始 URL，适用无防盗链场景）（`routes/video.js:50-86`）。
-- 无 URL 时返回使用说明页；有 URL 时返回 Artplayer HTML。播放器库通过外链 `<script src="/assets/artplayer.js" defer>` 加载（`routes/video.js:88-116`），不再内联进 `<script>`——飞书多 iframe 只下载一次。
+- 无 URL 时返回使用说明页；有 URL 时返回 Artplayer HTML。播放器库通过外链 `<script src="/assets/artplayer.js" defer>` 加载（`routes/video.js:98`），不再内联进 `<script>`——飞书多 iframe
+  只下载一次。因为 `defer` 库脚本晚于内联脚本执行，`new Artplayer(...)` 的初始化必须包在 `DOMContentLoaded` 回调里，否则库全局未定义会抛 `ReferenceError`（`routes/video.js:100-116`），详见
+  [外置资产与构建部署](assets-and-build.md) 第 1.4 节。
 - Artplayer 源码由 `worker.js` Text module 导入后经 `/assets/` 分支外置 serve（见 [外置资产与构建部署](assets-and-build.md) 第 1 节），`video.js` 不 import，便于单独测试与热替换。
 
 ### 2.2 /img/ 图片
@@ -65,7 +68,8 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 
 ## 3 /github/<user>/<repo>[/<path>]
 
-`routes/github.js` 让 Worker 作为中立客户端拉 GitHub Contents API、再把内容渲染成自包含 HTML。设计取舍：**走 raw 源码 + markdown 渲染，而不是 `github.html` accept**——`github.html` 会把 img src 转成 `private-user-images` 的 JWT URL（几分钟失效，但 HTML 缓存 5 分钟 → 图片死链）；raw 路线下 GitHub 把外部图走 camo 代理（稳定）且保留干净 URL，彻底解决图片过期（`routes/github.js:12-17,261-266`）。
+`routes/github.js` 让 Worker 作为中立客户端拉 GitHub Contents API、再把内容渲染成自包含 HTML。设计取舍：**走 raw 源码 + markdown 渲染，而不是 `github.html` accept**——`github.html` 会把 img src 转成
+`private-user-images` 的 JWT URL（几分钟失效，但 HTML 缓存 5 分钟 → 图片死链）；raw 路线下 GitHub 把外部图走 camo 代理（稳定）且保留干净 URL，彻底解决图片过期（`routes/github.js:12-17,261-266`）。
 
 ### 3.1 输入形态：`@ref` 与分支名含斜杠
 
@@ -79,7 +83,9 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 
 `serveGithub()` 按文件类型分三路（`routes/github.js:798-856`）：
 
-- **代码文件**（扩展名映射表 `CODE_LANG` 覆盖 34 种语言，`routes/github.js:67-86`）：走 `raw.githubusercontent.com` 拉 raw 源码，Worker 端用 highlight.js `hljs.highlight()` 纯函数产出着色静态 HTML，**浏览器零 JS**。内置 15 种核心语言；其余语言按需 fetch 语言模块后注册再高亮（`highlightWith()`），缓存进同 isolate 的 `LANG_MODULE_CACHE`（`routes/github.js:364-374`）。主题 CSS（GitHub light + dark）经 `/assets/github.css` 外链加载，`prefers-color-scheme` 自动切换。
+- **代码文件**（扩展名映射表 `CODE_LANG` 覆盖 34 种语言，`routes/github.js:67-86`）：走 `raw.githubusercontent.com` 拉 raw 源码，Worker 端用 highlight.js `hljs.highlight()` 纯函数产出着色静态
+  HTML，**浏览器零 JS**。内置 15 种核心语言；其余语言按需 fetch 语言模块后注册再高亮（`highlightWith()`），缓存进同 isolate 的 `LANG_MODULE_CACHE`（`routes/github.js:364-374`）。主题 CSS（GitHub
+  light + dark）经 `/assets/github.css` 外链加载，`prefers-color-scheme` 自动切换。
 - **文档**（`.md/.rst/.org` 等，`DOC_EXTS`）：走 GitHub Contents API raw（拿 Markdown 源码）→ Worker 端 markdown-it 渲染（`lib/markdown.js`，代码块由 highlight.js 着色）→ HTMLRewriter 代理图片与媒体。
 - **目录**：GitHub 对目录返回 JSON 数组，渲染文件列表页（目录优先、文件次之、各自按名排序）。
 
@@ -90,8 +96,10 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 文档路径的 `buildRewriter()` 用 HTMLRewriter 改写 `<img>` / `<video>` / `<source>` / `<a>`：
 
 - `<img>` **优先取 `data-canonical-src`**（GitHub 对 camo 代理图的真实源 URL，如 shields.io），没有再用 `src`（`routes/github.js:172-182`）。
-- 相对路径统一用 `resolveUrl()` 按 `raw.githubusercontent.com/{owner}/{repo}/{ref}/{fileDir}` 解析——文件所在目录必须算进 base，否则 `readme/README.zh-CN.md` 里 `../assets/x.png` 会把分支名那层吃掉、raw 404（`routes/github.js:146-152`）。
-- `<a>` 只改写相对路径的资源链接为 `/proxy/<resolved>`，避免图片被 `<a href="assets/x.png">` 包裹时点击解析到不存在的 `/github/.../assets/x.png`；绝对外部链接保持原样直接跳转（`routes/github.js:190-199`）。
+- 相对路径统一用 `resolveUrl()` 按 `raw.githubusercontent.com/{owner}/{repo}/{ref}/{fileDir}` 解析——文件所在目录必须算进 base，否则 `readme/README.zh-CN.md` 里 `../assets/x.png`
+  会把分支名那层吃掉、raw 404（`routes/github.js:146-152`）。
+- `<a>` 只改写相对路径的资源链接为 `/proxy/<resolved>`，避免图片被 `<a href="assets/x.png">` 包裹时点击解析到不存在的
+  `/github/.../assets/x.png`；绝对外部链接保持原样直接跳转（`routes/github.js:190-199`）。
 
 ### 3.4 代码高亮的按需语言模块
 
@@ -103,7 +111,8 @@ x-page 最实用的两组能力：四条媒体 / 视频 / 图片子路由，以�
 
 ### 3.5 限流与错误处理
 
-无 `GITHUB_TOKEN` 时 GitHub API 60 次/h；配置 `GITHUB_TOKEN` 可提至 5000/h。目录与文件都 `cf: { cacheTtl: 300, cacheEverything: true }` 有 5 分钟边缘缓存减轻 API 压力（`routes/github.js:280-283`）。错误页统一拼自包含错误页，含「在 GitHub 查看」跳转。
+无 `GITHUB_TOKEN` 时 GitHub API 60 次/h；配置 `GITHUB_TOKEN` 可提至 5000/h。目录与文件都 `cf: { cacheTtl: 300, cacheEverything: true }` 有 5 分钟边缘缓存减轻 API
+压力（`routes/github.js:280-283`）。错误页统一拼自包含错误页，含「在 GitHub 查看」跳转。
 
 ## 4 /github/ 渲染细节与错误兜底
 

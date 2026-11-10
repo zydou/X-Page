@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:0db7fae8167853f0195408a93acd6661385075adf667307d1efbf9d65d9e2c4d",
+  "pageVersion": "sha256:a1a465941169e29781702ffe461d1d4aa5a3a323a73fefde345bfbca3c41baa6",
   "claims": [
     {
       "id": "claim_f51f162b24414602989954d65bc97063",
@@ -143,10 +143,30 @@
           "version": "repo-lines-v1:sha256:3a1ed3c2d12d0ac92c9e3e14ee8b88e71cdec0edb5cad48393b9cfe0ec04a035:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5NmRjNDgxNDlmNWE4M2QxZWQ2ZGJiMzliYmM3ZTJiOTAyYWEzZDM0ZDZiZDVhZTRiMjkxYjY4ZGYwY2E3OWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiNThjNzhmMWE1ZGY1ZGZiYzEzYWQ3MTlmZWZlYjc1MmJhZDQ4OGEzNTlhY2NjMGY5MTE3MGFkMTgxZGE5MzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM1NTBhZDUyYzk5ZTMxNDk4MWY2NmQ4NjI3ZTA1OGY1NzM1ZTA1NjU4ZmFlNTg0YzQ3ZTJjMWE5MjI4NmYzMmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwMDE0YmEzYjgyODg4YWEwOGM1MzYyYTA1Y2JiM2E2YTBiMDVlYmRkZDlkY2VjY2RlMGNlZmMzZWM5ODVmMWEifQ"
         }
       ]
+    },
+    {
+      "id": "claim_95d53f8a5a5b4ac380bb8f31573b02e0",
+      "statement": "routes/video.js 以 <script src=\"/assets/artplayer.js\" defer> 外链加载播放器库，并把内联初始化（ASPECT_RATIO/PLAYBACK_RATE 配置与 new Artplayer({...})）包在 window.addEventListener(\"DOMContentLoaded\", ...) 回调里；defer 保证库脚本在该事件之前执行，因此回调触发时 Artplayer 全局已就绪。",
+      "evidence": [
+        {
+          "resource": "repo://routes/video.js#L98-L116",
+          "version": "repo-lines-v1:sha256:8d0298ed689e2498a9025d1ecd2b280b2107a80db8d81d5c876905b359bce19d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0ODUzYjcxZmJlYTNiOGNkMmQ4OWM4Y2IwMDg4OTQ2MWQ5ZWFhMGQzMWM4Y2E2NzRmZTEwOTRmOGNjOGRkMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmMzU4ZjAzNzFhNmU3MzJjNDM0MDMzMjIzNTE5OWRjZDkxZWJjNDYyMzlhNWRkY2ZlNmY5YTYzZTZlYmVjZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgyZGUyMzg0OTY2ODJhNmVhNmQzODY5NzU5MWQzZThjMzk5YWJhNjhiMTk4MGYzZGNmYTNmZDcyMDU5NWQyNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhkNDdkMWMyNDAwODI3ZDVjNTM5ZTE1MmJlYTFjMjQwYjI0MzZjNWQyNzFkNjY3MGJkZDg2OWY1MzE1NzgzN2YifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5e9456f7785042a89febe34778ce6c2c",
+      "statement": "以 defer（或同为 defer 语义的 type=module）外链加载、又在同一文档里用内联脚本立刻调用的库，必须把调用包进 DOMContentLoaded：内联脚本在 HTML 解析到它时立即执行，早于任何 defer 脚本，直接在顶层调用会因库全局未定义而抛 ReferenceError。",
+      "evidence": [
+        {
+          "resource": "repo://routes/video.js#L98-L116",
+          "version": "repo-lines-v1:sha256:8d0298ed689e2498a9025d1ecd2b280b2107a80db8d81d5c876905b359bce19d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU0ODUzYjcxZmJlYTNiOGNkMmQ4OWM4Y2IwMDg4OTQ2MWQ5ZWFhMGQzMWM4Y2E2NzRmZTEwOTRmOGNjOGRkMDUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmMzU4ZjAzNzFhNmU3MzJjNDM0MDMzMjIzNTE5OWRjZDkxZWJjNDYyMzlhNWRkY2ZlNmY5YTYzZTZlYmVjZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgyZGUyMzg0OTY2ODJhNmVhNmQzODY5NzU5MWQzZThjMzk5YWJhNjhiMTk4MGYzZGNmYTNmZDcyMDU5NWQyNTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhkNDdkMWMyNDAwODI3ZDVjNTM5ZTE1MmJlYTFjMjQwYjI0MzZjNWQyNzFkNjY3MGJkZDg2OWY1MzE1NzgzN2YifQ"
+        }
+      ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T05:42:52.452Z"
+    "at": "2026-11-10T10:39:10.208Z"
   }
 }

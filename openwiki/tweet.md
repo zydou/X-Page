@@ -5,7 +5,7 @@ description: 阐明推文渲染的数据源、翻译与缓存策略，以及自�
 tags: [推文, Twitter, fxtwitter, 翻译, R2缓存]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T05:42:52.452Z
+    at: 2026-11-10T10:39:10.208Z
 sources:
   - id: openwiki-source-51d8dc0d173d42237cb85fda
     resource: repo://lib/thread.js
@@ -16,7 +16,8 @@ generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 
 # 推文服务
 
-`/<user>/status/<id>[?mode=m][&lang=l]` 是 x-page 的主力路由：把 X / Twitter 推文渲染成完全自包含的 HTML（样式经 `<link rel="stylesheet" href="/assets/twitter.css">` 外链加载，`twitter.css` 内含裁剪后的 water 子集 + 推文专属覆盖），供嵌入环境直接呈现。
+`/<user>/status/<id>[?mode=m][&lang=l]` 是 x-page 的主力路由：把 X / Twitter 推文渲染成完全自包含的 HTML（样式经 `<link rel="stylesheet" href="/assets/twitter.css">` 外链加载，`twitter.css`
+内含裁剪后的 water 子集 + 推文专属覆盖），供嵌入环境直接呈现。
 
 数据来源是 **fxtwitter**（非官方镜像，对 X API 的 Thread 数据做了友好封装）。翻译挂在 fxtwitter 端，x-page 只负责渲染、缓存与自推链补全。
 
@@ -30,12 +31,12 @@ generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 
 ### 1.1 `mode` 四种取值
 
-| 值 | 含义 |
-|---|---|
+| 值            | 含义 |
+| ------------- | ---- |
 | `all`（缺省） | 完整 thread（含本推祖先）+ 每条引用 |
-| `self` | 仅本推 |
-| `quote` | 本推 + 引用 |
-| `thread` | 本推 + 串推后代（剔除祖先） |
+| `self`        | 仅本推 |
+| `quote`       | 本推 + 引用 |
+| `thread`      | 本推 + 串推后代（剔除祖先） |
 
 串推后代用 `descendantsOf()` 从 thread 中按作者与 `replying_to` 计算（`lib/thread.js`）。
 
@@ -54,15 +55,18 @@ generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 
 ### 1.4 Markdown 变体
 
-`Accept: text/markdown` 时走 `renderMarkdown(data, cfg, mode, ...)` 把结构化数据渲染成 Markdown，响应头与 `/html/` 共享 `x-markdown-tokens` 估算，共 `vary: Accept`。完整说明见 [Markdown 转换](markdown.md)。
+`Accept: text/markdown` 时走 `renderMarkdown(data, cfg, mode, ...)` 把结构化数据渲染成 Markdown，响应头与 `/html/` 共享 `x-markdown-tokens` 估算，共 `vary: Accept`。完整说明见
+[Markdown 转换](markdown.md)。
 
 ## 2 自推链补全：`lib/thread.js`
 
-X/Twitter 的自推串推常被删单条推文截断——fxtwitter 的 `/2/thread` 向下遍历在被删推处截断，但向上遍历可穿过墓碑。`lib/thread.js` 是一组**纯函数**（不做 I/O，补全所需的会话数据经注入的 `io` 获取，可离线验证）：
+X/Twitter 的自推串推常被删单条推文截断——fxtwitter 的 `/2/thread` 向下遍历在被删推处截断，但向上遍历可穿过墓碑。`lib/thread.js` 是一组**纯函数**（不做 I/O，补全所需的会话数据经注入的 `io`
+获取，可离线验证）：
 
 ### 2.1 墓碑判定 `isTombstone(post)`
 
-墓碑是被删 / 被封 / 私密等不可用推文的占位对象（无正文、无时间）。判定规则（`lib/thread.js:27-31`）：空或无 id、`type === "tombstone"`、或无 author 且无 text 且无 html_no_media。墓碑在补全时是链上的节点、渲染时不输出。
+墓碑是被删 / 被封 / 私密等不可用推文的占位对象（无正文、无时间）。判定规则（`lib/thread.js:27-31`）：空或无 id、`type === "tombstone"`、或无 author 且无 text 且无
+html_no_media。墓碑在补全时是链上的节点、渲染时不输出。
 
 ### 2.2 补全门控 `needsSelfThreadRepair(thread)`
 
@@ -78,7 +82,8 @@ thread 中没有父节点的活推文，取最早的一条（按 `created_timest
 
 1. 若 thread 中根被截断：取一条活节点的会话祖先链，确认是同作者自推链后并入、定位根。
 2. 以根为起点，从会话回复里收集同作者回复，闭包并入（父节点已在链上才加入）。
-3. 某回复的父节点既非已知活推文、也未尝试过 → 视为被删推，经 `parentOfTombstone()` 从会话祖先链推出墓碑的父节点（只处理链上恰一墓碑、多墓碑或不唯一时不猜测，直接返回 `null`），补回的墓碑带上 `replying_to` 让向下遍历能穿过。
+3. 某回复的父节点既非已知活推文、也未尝试过 → 视为被删推，经 `parentOfTombstone()` 从会话祖先链推出墓碑的父节点（只处理链上恰一墓碑、多墓碑或不唯一时不猜测，直接返回 `null`），补回的墓碑带上
+   `replying_to` 让向下遍历能穿过。
 
 ### 2.5 HTML/Markdown 的自推链
 

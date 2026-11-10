@@ -5,13 +5,13 @@ description: 说明统一 Worker 如何分发请求到各子路由，强调路�
 tags: [路由, 请求分发, Worker]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T05:42:52.452Z
+    at: 2026-11-10T10:39:10.208Z
 sources:
   - id: openwiki-source-8671e0889cf4d1fe8869457d
     resource: repo://routes/index.js
   - id: openwiki-source-1adf5eb6c74462684e873d78
     resource: repo://worker.js
-generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
+generated: { by: "claude-code", at: "2026-11-10T10:39:10.208Z" }
 ---
 
 # 路由与请求处理
@@ -20,28 +20,29 @@ generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 
 ## 1 路由分发优先级
 
-`worker.js:79-145` 的 `fetch()` 收到请求后先对 `pathname` 去首斜杠、做一次 `decodeURIComponent`（失败时保留原值、靠下游再 decode 一次），然后按顺序判断、把命中的路径委托给子模块的 handler：
+`worker.js:78-144` 的 `fetch()` 收到请求后先对 `pathname` 去首斜杠、做一次 `decodeURIComponent`（失败时保留原值、靠下游再 decode 一次），然后按顺序判断、把命中的路径委托给子模块的 handler：
 
-| 优先级 | 匹配条件 | 处理者 | 用途 |
-|---|---|---|---|
-| 1 | `/` 空路径 | `routes/index.js` 的 `indexHtml()` | 302 跳转到 `https://github.com/zydou/X-Page` |
-| 2 | `favicon.ico` | 静默返回 204 | 不进其他 |
-| 3 | 名为 `webhook` | `routes/webhook.js` 的 `handleWebhook()` | Telegram bot webhook |
-| 4 | `vid/` 或 `vid` | `routes/video.js` `serveVideo()` | 视频播放器 HTML |
-| 5 | `img/` 或 `img` | `routes/image.js` `serveImage()` | 图片预览 HTML |
-| 6 | `html/` 或 `html` | `routes/html.js` `serveHtml()` | HTML 抓取改写 |
-| 7 | `wechat/` 或 `wechat` | `routes/wechat.js` `serveWechat()` | 微信公众号文章 |
-| 8 | `proxy/` 或 `proxy` | `routes/proxy.js` `handleProxy()` | 通用媒体代理 |
-| 9 | `assets/` 前缀 | `worker.js` 内联分支 | 外置静态 CSS/JS（immutable 长缓存） |
-| 10 | `github/` 或 `github` | `routes/github.js` `serveGithub()` | GitHub README/文件渲染 |
-| 11 | 其余全部 | `routes/tweet.js` `serveTweet()` | 推文（兜底） |
+| 优先级 | 匹配条件              | 处理者                                   | 用途 |
+| ------ | --------------------- | ---------------------------------------- | ---- |
+| 1      | `/` 空路径            | `routes/index.js` 的 `indexHtml()`       | 302 跳转到 `https://github.com/zydou/X-Page` |
+| 2      | `favicon.ico`         | 静默返回 204                             | 不进其他 |
+| 3      | 名为 `webhook`        | `routes/webhook.js` 的 `handleWebhook()` | Telegram bot webhook |
+| 4      | `vid/` 或 `vid`       | `routes/video.js` `serveVideo()`         | 视频播放器 HTML |
+| 5      | `img/` 或 `img`       | `routes/image.js` `serveImage()`         | 图片预览 HTML |
+| 6      | `html/` 或 `html`     | `routes/html.js` `serveHtml()`           | HTML 抓取改写 |
+| 7      | `wechat/` 或 `wechat` | `routes/wechat.js` `serveWechat()`       | 微信公众号文章 |
+| 8      | `proxy/` 或 `proxy`   | `routes/proxy.js` `handleProxy()`        | 通用媒体代理 |
+| 9      | `assets/` 前缀        | `worker.js` 内联分支                     | 外置静态 CSS/JS（immutable 长缓存） |
+| 10     | `github/` 或 `github` | `routes/github.js` `serveGithub()`       | GitHub README/文件渲染 |
+| 11     | 其余全部              | `routes/tweet.js` `serveTweet()`         | 推文（兜底） |
 
 ### 1.1 为什么顺序是这个样子
 
 - **根路径先来**：`/` 由 `routes/index.js` 的 `indexHtml()` 返回 302 重定向到项目 GitHub 主页，不做异步 I/O。
 - **favicon 静默吞掉**：避免 404 噪音。
 - **webhook 在媒体子路由之前**：它是唯一非 GET 的模式（POST 入口）。
-- **`/assets/` 在 proxy 之后、github 之前**：静态资产分支（`worker.js:121-136`）匹配 `assets/` 前缀，按文件名从 Text module 导入的字符串里取 body 外置 serve，带 `Cache-Control: public, max-age=31556952, immutable`。它必须排在推文兜底之前，否则 `assets/twitter.css` 会被当推文解析。
+- **`/assets/` 在 proxy 之后、github 之前**：静态资产分支（`worker.js:121-136`）匹配 `assets/` 前缀，按文件名从 Text module 导入的字符串里取 body 外置 serve，带
+  `Cache-Control: public, max-age=31556952, immutable`。它必须排在推文兜底之前，否则 `assets/twitter.css` 会被当推文解析。
 - **推文是兜底**：`/<user>/status/<id>` 形态最宽泛，任何不符合其他前缀的路径都试着按推文格式解析。新加固定前缀的子路由都必须插到推文判断之前。
 
 ### 1.2 兜底逻辑与 404
@@ -80,11 +81,13 @@ generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 
 ### 2.8 `assets/<name>` → 外置静态资产
 
-`worker.js:121-136` 的内联分支。按 `assetName` 从 `{ "twitter.css", "github.css", "artplayer.js" }` 里取 Text module 导入的 body，带 immutable 长缓存返回；未命中返回 404。见 [外置资产与构建部署](assets-and-build.md)。
+`worker.js:121-136` 的内联分支。按 `assetName` 从 `{ "twitter.css", "github.css", "artplayer.js" }` 里取 Text module 导入的 body，带 immutable 长缓存返回；未命中返回 404。见
+[外置资产与构建部署](assets-and-build.md)。
 
 ### 2.9 `GET /github/...` → GitHub 仓库浏览
 
-`serveGithub(request, env, cleanPath, rawPathname, hljs)`。文档走 GitHub API raw + markdown-it 渲染，代码文件走 highlight.js Worker 端高亮；`rawPathname`（未 decode）用于检测 `@ref` 里的 `%2F`。见 [媒体代理与 GitHub 渲染](media-github.md)、[Markdown 转换](markdown.md)。
+`serveGithub(request, env, cleanPath, rawPathname, hljs)`。文档走 GitHub API raw + markdown-it 渲染，代码文件走 highlight.js Worker 端高亮；`rawPathname`（未 decode）用于检测 `@ref` 里的 `%2F`。见
+[媒体代理与 GitHub 渲染](media-github.md)、[Markdown 转换](markdown.md)。
 
 ### 2.10 `GET /<user>/status/<id>` → 推文
 
@@ -92,11 +95,14 @@ generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 
 ## 3 路径预处理
 
-`worker.js` 入站后先做一次 `decodeURIComponent`，这样中文路径也能识别；失败时保留原值、由子模块再 decode 一次。子路由拿到的 `cleanPath` 已去首斜杠；有的路由（如 `/github/`）还会拿原始 pathname 来检测 `@ref` 里的 `%2F`。
+`worker.js` 入站后先做一次 `decodeURIComponent`，这样中文路径也能识别；失败时保留原值、由子模块再 decode 一次。子路由拿到的 `cleanPath` 已去首斜杠；有的路由（如 `/github/`）还会拿原始 pathname 来检测
+`@ref` 里的 `%2F`。
 
 ## 4 资产注入路径
 
-`worker.js:36-38` 通过 Text module 导入三份**浏览器资产**（`artplayer.mjs`、`assets/twitter.css`、`assets/github.css`），但不再作为参数下发给下游、也不内联进页面，而是在 `/assets/` 分支外置 serve（`worker.js:121-136`）；`video.js`、`tweet.js`、`github.js` 改用 `<script src>` / `<link href>` 外链引用。`worker.js:44` 另以 `import * as HLJS` 导入 `highlight.mjs`，它作为参数传给 `serveGithub` 在 Worker 端 SSR 渲染、不下发浏览器。Wrangler Text module rule 要求 import 必须写在入口文件，子模块用 ESM 导入这些文本模块不可行。见 [外置资产与构建部署](assets-and-build.md)。
+`worker.js:36-38` 通过 Text module 导入三份**浏览器资产**（`artplayer.mjs`、`assets/twitter.css`、`assets/github.css`），但不再作为参数下发给下游、也不内联进页面，而是在 `/assets/` 分支外置
+serve（`worker.js:121-136`）；`video.js`、`tweet.js`、`github.js` 改用 `<script src>` / `<link href>` 外链引用。`worker.js:44` 另以 `import * as HLJS` 导入 `highlight.mjs`，它作为参数传给
+`serveGithub` 在 Worker 端 SSR 渲染、不下发浏览器。Wrangler Text module rule 要求 import 必须写在入口文件，子模块用 ESM 导入这些文本模块不可行。见 [外置资产与构建部署](assets-and-build.md)。
 
 ## 5 关联
 
