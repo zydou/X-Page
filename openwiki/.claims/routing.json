@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:24574115af26fa6fcc5ba62b1c60365c99e129aaec340a7bbfbb33dab41b7bc7",
+  "pageVersion": "sha256:8195657e27d5ca3c9e4b17643a9562850916fb55ec2a70663e3b76d488657c12",
   "claims": [
     {
       "id": "claim_ebd4ddf78a4d47cfbecf8f3cd4fe92cd",
@@ -8,7 +8,7 @@
       "evidence": [
         {
           "resource": "repo://worker.js",
-          "version": "repo-file-v1:sha256:dbb2576e0f91a2b6f8c487d44d9c0f2ff9873b34b2ab5739985d127f93120de2"
+          "version": "repo-file-v1:sha256:998d01a85ed0a1e6f1b5803f65f5a254d68d7af7c5cd34bc66197f036ad7157a"
         }
       ]
     },
@@ -32,7 +32,7 @@
       "evidence": [
         {
           "resource": "repo://worker.js",
-          "version": "repo-file-v1:sha256:dbb2576e0f91a2b6f8c487d44d9c0f2ff9873b34b2ab5739985d127f93120de2"
+          "version": "repo-file-v1:sha256:998d01a85ed0a1e6f1b5803f65f5a254d68d7af7c5cd34bc66197f036ad7157a"
         }
       ]
     },
@@ -48,17 +48,17 @@
     },
     {
       "id": "claim_f3698452b063489aa7c3369cd185b303",
-      "statement": "worker.js 按根、favicon、webhook、vid、img、html、r2-html、wechat、proxy、assets/、github、推文兜底的顺序分发请求；/r2-html/ 分支位于 /html/ 之后、/wechat/ 之前（worker.js:112-114），/assets/ 静态资产分支位于 proxy 之后、github 之前（worker.js:127-141）。worker.js 顶部注释列出的顺序把 /assets/ 排在 /webhook 之前，与 fetch() 实际的 if 顺序不同。",
+      "statement": "worker.js 按根、favicon、webhook、vid、img、html、r2-html、wechat、proxy、assets/、github、推文兜底的顺序分发请求；/r2-html/ 分支位于 /html/ 之后、/wechat/ 之前（worker.js:112-114），/assets/ 静态资产分支位于 proxy 之后、github 之前（worker.js:127-141）。worker.js 顶部注释列出的顺序与 fetch() 的 if 顺序一致。",
       "evidence": [
         {
           "resource": "repo://worker.js",
-          "version": "repo-file-v1:sha256:dbb2576e0f91a2b6f8c487d44d9c0f2ff9873b34b2ab5739985d127f93120de2"
+          "version": "repo-file-v1:sha256:998d01a85ed0a1e6f1b5803f65f5a254d68d7af7c5cd34bc66197f036ad7157a"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-12T05:54:32.565Z"
+    "at": "2026-11-12T06:31:33.521Z"
   }
 }

@@ -5,13 +5,13 @@ description: 说明统一 Worker 如何分发请求到各子路由，强调路�
 tags: [路由, 请求分发, Worker]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-12T05:54:32.565Z
+    at: 2026-11-12T06:31:33.521Z
 sources:
   - id: openwiki-source-8671e0889cf4d1fe8869457d
     resource: repo://routes/index.js
   - id: openwiki-source-1adf5eb6c74462684e873d78
     resource: repo://worker.js
-generated: { by: "claude-code", at: "2026-11-12T05:54:32.565Z" }
+generated: { by: "claude-code", at: "2026-11-12T06:31:33.521Z" }
 ---
 
 # 路由与请求处理
@@ -38,9 +38,6 @@ generated: { by: "claude-code", at: "2026-11-12T05:54:32.565Z" }
 | 12     | 其余全部                | `routes/tweet.js` `serveTweet()`         | 推文（兜底） |
 
 完整优先级链：root → favicon → webhook → `/vid/` → `/img/` → `/html/` → `/r2-html/` → `/wechat/` → `/proxy/` → `/assets/` → `/github/` → tweet（兜底）→ 404。
-
-> [!NOTE]
-> `worker.js` 顶部注释列出的顺序把 `/assets/` 排在 `/webhook` 之前，与 `fetch()` 里实际的 `if` 顺序不同；以本页表格（即 `fetch()` 的 `if` 顺序）为准。`/r2-html/` 分支位于 `/html/` 之后、`/wechat/` 之前（`worker.js:112-114`）。
 
 ### 1.1 为什么顺序是这个样子
 

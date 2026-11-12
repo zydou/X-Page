@@ -5,7 +5,7 @@ description: 为新读者提供 x-page 的概览、服务目录与本地开发�
 tags: [快速上手, 概览, 开发, 部署]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-12T05:54:32.565Z
+    at: 2026-11-12T06:31:33.521Z
 sources:
   - id: openwiki-source-8a2e26d4137b8250f68bb869
     resource: repo://build.sh
