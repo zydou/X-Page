@@ -108,9 +108,20 @@ https://<your-worker-domain>/html/<URL>
 - 可自定义 `UA` 绕过微信公众号等对 UA 的白名单限制
 - 图片/视频等媒体经 Worker 代理加载，绕过防盗链
 - 页面内 `<a>` 链接改写为 `/html/<url>`，导航不脱离代理体系
-- 智能处理 JS/CSS：绝对地址的 CDN 资源走代理，相对路径的资源直连原始域名
-  （避免 Vite 等构建工具的 chunk 导入在代理后解析错位）
+- 智能处理 JS/CSS：绝对地址的 CDN 资源走代理，相对路径的资源直连原始域名 （避免 Vite 等构建工具的 chunk 导入在代理后解析错位）
 - 非 HTML 资源原样透传
+
+### 📄 HTML 代理（R2 持久缓存）
+
+```txt
+https://<your-worker-domain>/r2-html/<URL>
+```
+
+与 `/html/` 功能完全一致，区别是 HTML 视图会缓存到 R2：先查 R2（key `r2html/<URL>`），命中直接返回；未命中才抓取并后台写回 R2。
+
+- 原文失效（被删 / 改版）后链接依然可读，内容以首次抓取为准
+- 重复访问省一次上游抓取
+- `Accept: text/markdown` 同样支持，Markdown 变体缓存在独立的 `md/r2-html/<URL>` 下
 
 ### 💬 微信公众号文章
 
@@ -176,14 +187,14 @@ Telegram 把每条更新 POST 到 `setWebhook` 指定的 URL；设置 `secret_to
 
 #### 所需 Secret（`wrangler secret put`）
 
-| Secret | 说明 |
-| ------ | ---- |
-| `BOT_TOKEN` | BotFather 创建 bot 得到的 token |
+| Secret           | 说明 |
+| ---------------- | ---- |
+| `BOT_TOKEN`      | BotFather 创建 bot 得到的 token |
 | `WEBHOOK_SECRET` | 自生成（如 `openssl rand -hex 16`），与 `setWebhook` 的 `secret_token` 一致 |
 | `IMGUR_CLIENTID` | Imgur Client-ID（图片优先 / 视频） |
-| `IMGBB_API_KEY` | ImgBB API Key（图片兜底） |
-| `X_PAGE_BASE` | X-Page 服务根地址（如 `https://<your-worker-domain>`） |
-| `ALLOWED_CHATS` | 白名单，逗号分隔，每项 `<chatId>` 或 `<chatId>:<threadId>`；留空则响应所有来源（不推荐） |
+| `IMGBB_API_KEY`  | ImgBB API Key（图片兜底） |
+| `X_PAGE_BASE`    | X-Page 服务根地址（如 `https://<your-worker-domain>`） |
+| `ALLOWED_CHATS`  | 白名单，逗号分隔，每项 `<chatId>` 或 `<chatId>:<threadId>`；留空则响应所有来源（不推荐） |
 
 #### 设置 webhook
 
@@ -193,13 +204,13 @@ Telegram 把每条更新 POST 到 `setWebhook` 指定的 URL；设置 `secret_to
 
 #### 支持的转换
 
-| 输入 | 输出 |
-| ---- | ---- |
-| `x.com/<user>/status/<id>` | 完整 / 本推 / 本推+引用 / 串推（4 种 `?mode=`） |
+| 输入                                        | 输出 |
+| ------------------------------------------- | ---- |
+| `x.com/<user>/status/<id>`                  | 完整 / 本推 / 本推+引用 / 串推（4 种 `?mode=`） |
 | `github.com/<user>/<repo>/blob/main/<file>` | `/github/...` README / 文件渲染 |
-| `mp.weixin.qq.com/s...` | `/wechat/<url>` 文章代理 |
-| 图片 / 视频消息 | 下载 → 图床（Imgur 优先、ImgBB 兜底）→ `/img/`、`/vid/` |
-| 任意 http(s) URL | `/vid/`、`/img/`、`/html/` |
+| `mp.weixin.qq.com/s...`                     | `/wechat/<url>` 文章代理 |
+| 图片 / 视频消息                             | 下载 → 图床（Imgur 优先、ImgBB 兜底）→ `/img/`、`/vid/` |
+| 任意 http(s) URL                            | `/vid/`、`/img/`、`/html/`、`/r2-html/` |
 
 全部回复为纯文本模式（Telegram 自动把裸 URL 变可点击）。媒体不落 R2，容量交给图床；Telegram Bot API 单文件下载上限 20MB。
 
@@ -222,13 +233,13 @@ Telegram 把每条更新 POST 到 `setWebhook` 指定的 URL；设置 `secret_to
 
 ### 环境变量（wrangler.toml `[vars]`）
 
-| 变量           | 默认值                | 说明 |
-| -------------- | --------------------- | ---- |
-| `TIMEZONE`     | `Asia/Shanghai`       | 时区，用于推文时间显示 |
-| `TWITTER_LANG` | `cn`                  | 推文翻译目标语言（BCP-47），留空则返回原文。可被单条链接的 `?lang=` 覆盖。fxtwitter 会把 `cn` 归一化为 `zh-cn`，两者等价 |
-| `TWITTER_PREWARM_LANGS` | `cn,ja`              | Telegram bot 推文预热语言列表（逗号分隔 BCP-47），每种语言各写一份 `tweet/<id>.<lang>.json`。留空则回退 `TWITTER_LANG`。只影响 bot 预热，不影响 `serveTweet` 默认渲染 |
-| `UA`           | iOS 微信内置浏览器 UA | `/html/` 路由抓取时的 User-Agent，用于绕过微信公众号白名单限制 |
-| `GITHUB_TOKEN` | （空）                | 可选，GitHub Personal Access Token（**权限留空即可**，详见上方说明）。以 Worker Secret 形式存储（`wrangler secret put`），不写入本文件。提升 `/github/` 路由的 API 限流配额（60次/h → 5000次/h） |
+| 变量                    | 默认值                | 说明 |
+| ----------------------- | --------------------- | ---- |
+| `TIMEZONE`              | `Asia/Shanghai`       | 时区，用于推文时间显示 |
+| `TWITTER_LANG`          | `cn`                  | 推文翻译目标语言（BCP-47），留空则返回原文。可被单条链接的 `?lang=` 覆盖。fxtwitter 会把 `cn` 归一化为 `zh-cn`，两者等价 |
+| `TWITTER_PREWARM_LANGS` | `cn,ja`               | Telegram bot 推文预热语言列表（逗号分隔 BCP-47），每种语言各写一份 `tweet/<id>.<lang>.json`。留空则回退 `TWITTER_LANG`。只影响 bot 预热，不影响 `serveTweet` 默认渲染 |
+| `UA`                    | iOS 微信内置浏览器 UA | `/html/` 路由抓取时的 User-Agent，用于绕过微信公众号白名单限制 |
+| `GITHUB_TOKEN`          | （空）                | 可选，GitHub Personal Access Token（**权限留空即可**，详见上方说明）。以 Worker Secret 形式存储（`wrangler secret put`），不写入本文件。提升 `/github/` 路由的 API 限流配额（60次/h → 5000次/h） |
 
 ### 本地开发
 
