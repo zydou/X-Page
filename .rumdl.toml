@@ -1,0 +1,7 @@
+# X-Page 仓库的 rumdl 配置。
+# extends 继承用户级全局配置（sentence-per-line、line-length 等），本文件只追加仓库自己的豁免。
+extends = "~/.config/rumdl/rumdl.toml"
+
+[global]
+# openwiki/ 由 OpenWiki 工具生成，格式由工具决定；rumdl 不应改写其产物（否则每次刷新都会被改回去）。
+exclude = ["openwiki/**"]
