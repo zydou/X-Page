@@ -13,7 +13,6 @@
  * 路由优先级（从高到低）：
  *   /               使用说明页
  *   /favicon.ico    静默返回 204
- *   /assets/        静态 CSS/JS（1 年 immutable 缓存，飞书多 iframe 只取一次）
  *   /webhook        Telegram bot 更新入口（POST，校验 secret_token）
  *   /vid/  /vid/d/  视频代理 / 直连
  *   /img/  /img/d/  图片代理 / 直连
@@ -21,6 +20,7 @@
  *   /r2-html/       同 /html/，HTML 视图额外缓存 R2
  *   /wechat/        微信公众号文章专用（标题可点回原文）
  *   /proxy/         通用媒体代理
+ *   /assets/        静态 CSS/JS（1 年 immutable 缓存，飞书多 iframe 只取一次）
  *   /github/        GitHub README 渲染（/assets/github.css）
  *   /<user>/status/<id>  推文（兜底 —— 因为形态最宽泛）
  *   其他            404
