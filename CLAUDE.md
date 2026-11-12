@@ -23,6 +23,9 @@ x-page/
 │   ├── markdown.js          # markdown → HTML (markdown-it + highlight.js), used by /github/
 │   ├── to-markdown.js       # HTML → markdown (Workers AI toMarkdown), used by /html/ + /wechat/
 │   ├── thread.js            # tweet 自推链补全 + 墓碑判定 + 后代筛选（纯函数，会话数据经 io 注入）
+│   ├── site-hacks/          # 站点专属 hack：中和个别站点的反镜像跳转 / 污染渲染逻辑
+│   │   ├── index.js         # 注册表：resolveSiteHack(host) + applySiteHack(html, hack)
+│   │   └── openrouter.js    # openrouter.ai：中和反镜像 location.replace + 去掉原站 canonical
 │   └── bot/                 # Telegram bot helpers（仅 webhook 路由使用）
 │       ├── matcher.js       # 纯函数：链接识别 + X-Page 链接生成
 │       ├── telegram.js      # Telegram Bot API 客户端
@@ -42,20 +45,20 @@ x-page/
 
 ## Routing
 
-| Path                             | Service |
-| -------------------------------- | ------- |
+| Path                                    | Service |
+| --------------------------------------- | ------- |
 | `/<user>/status/<id>[?mode=m][&lang=l]` | Tweet → standalone HTML; `?mode=self` / `quote` / `thread` / `all`（缺省即 `all`，全部推文）；`?lang=` 覆盖 `TWITTER_LANG`，R2 key 带语言维度（`tweet/<id>.<lang>.json`） |
-| `/vid/<raw-url>`                 | Video → player HTML (proxied, Range passthrough) |
-| `/vid/d/<raw-url>`               | Video → player HTML (direct, no proxy) |
-| `/img/<raw-url>`                 | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
-| `/img/d/<raw-url>`               | Image → adaptive HTML (direct) |
-| `/html/<raw-url>`                | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs); `Accept: text/markdown` → markdown |
-| `/wechat/<raw-url>`              | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
-| `/proxy/<raw-url>`               | Generic passthrough proxy; rewrites JS/CSS relative URLs |
-| `/github/<user>/<repo>[/<path>]` | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
-| `/assets/<name>` | Externalized browser CSS/JS (`twitter.css` / `github.css` / `artplayer.js`), `Cache-Control: immutable` 1 年 |
-| `/webhook`                       | Telegram bot webhook（POST，校验 `X-Telegram-Bot-Api-Secret-Token`；其余请求 403） |
-| `/`                              | 302 redirect to the GitHub repo |
+| `/vid/<raw-url>`                        | Video → player HTML (proxied, Range passthrough) |
+| `/vid/d/<raw-url>`                      | Video → player HTML (direct, no proxy) |
+| `/img/<raw-url>`                        | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
+| `/img/d/<raw-url>`                      | Image → adaptive HTML (direct) |
+| `/html/<raw-url>`                       | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs); `Accept: text/markdown` → markdown |
+| `/wechat/<raw-url>`                     | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
+| `/proxy/<raw-url>`                      | Generic passthrough proxy; rewrites JS/CSS relative URLs |
+| `/github/<user>/<repo>[/<path>]`        | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
+| `/assets/<name>`                        | Externalized browser CSS/JS (`twitter.css` / `github.css` / `artplayer.js`), `Cache-Control: immutable` 1 年 |
+| `/webhook`                              | Telegram bot webhook（POST，校验 `X-Telegram-Bot-Api-Secret-Token`；其余请求 403） |
+| `/`                                     | 302 redirect to the GitHub repo |
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
@@ -74,62 +77,73 @@ The `/html/` route (`routes/html.js`) fetches the target page and rewrites it wi
 The `/proxy/` route (`routes/proxy.js`) additionally rewrites JS/CSS **content**: relative `import("./...")`, `from"./..."`, and `url(...")` references are converted to absolute proxy paths,
 so Vite-style chunk loading works through the proxy.
 
+### Site-specific hacks (`lib/site-hacks/`)
+
+Some proxied sites run client-side logic a generic rewriter can't fix.
+For example, openrouter.ai ships an inline "anti-mirror" script that calls `location.replace()`.
+It bounces the browser back to the real origin whenever the hostname isn't whitelisted, leaving only a skeleton.
+`lib/site-hacks/` holds one file per site, each exporting:
+
+- `matches(host)` — whether the hack applies to this target hostname
+- `sanitize(html)` — exact neutralization over the **fully-buffered** HTML string
+
+`routes/html.js` resolves the hack by hostname, then applies `sanitize` after the HTMLRewriter pass.
+It runs in all three buffered paths: markdown, main HTML, and the rewrite-failure fallback.
+To add a site, create a file and register one entry in `HACKS`.
+
+Why buffer the whole string instead of using an HTMLRewriter `text` handler?
+HTMLRewriter streams a script body as multiple chunks, so a marker can straddle a chunk boundary and `includes()` misses it.
+Already-streamed content also can't be retracted with `remove()`.
+The buffered string is immune to both.
+It also lets a hack target only the *executable* copy of a script.
+That matters for Next.js, whose flight payload holds escaped data copies of the same script that hydration needs.
+
 ### `Accept: text/markdown` (tweet / html / wechat)
 
-These three routes return `text/markdown` when the request's `Accept` header mentions
-`text/markdown`; otherwise they return HTML unchanged. **Every branch sets `Vary: Accept`** —
-without it the edge would serve a cached HTML response to a markdown client.
+These three routes return `text/markdown` when the request's `Accept` header mentions `text/markdown`; otherwise they return HTML unchanged.
+**Every branch sets `Vary: Accept`** — without it the edge would serve a cached HTML response to a markdown client.
 
 Responses also carry `x-markdown-tokens` (CJK-aware estimate from `estimateTokens()` in `lib/utils.js`).
 
-The tweet route renders markdown from fxtwitter data itself. `/html/` and `/wechat/` instead go
-through Workers AI `toMarkdown` (`lib/to-markdown.js`), with three constraints:
+The tweet route renders markdown from fxtwitter data itself.
+`/html/` and `/wechat/` instead go through Workers AI `toMarkdown` (`lib/to-markdown.js`), with three constraints:
 
-- **Always pass the fetched HTML string, never let the converter fetch the URL.** `/html/` and
-  `/wechat/` depend on a custom User-Agent (default iOS WeChat) plus Referer to retrieve bodies;
-  only the Worker can do that. The converter receives the already-fetched HTML as a blob.
-- **Relative URLs are resolved by injecting a `<base href>` tag.** After `buildRewriter()` every
-  `<a href>` is `/html/<abs>` and every media attribute is `/proxy/<abs>`, so no page-relative
-  links remain; pointing the base at this Worker's origin absolutises both internal path families.
-  `conversionOptions.html.hostname` is deliberately *not* used — it works over REST but is silently
-  ignored through the Workers AI binding (verified on x-dev: 78 links emitted relative). The
-  converter still drops `srcset` and `data-src`-only images, which is why `buildRewriter()`'s
-  srcset/`data-src`→`src` backfill must stay.
-- **Results must be cached in R2** under `md/<route>/<target>`. HTML conversion is deterministic
-  and model-free (0 Neurons), but a single page takes 130–330 ms and ~8% of requests show a
-  48–100 s tail, so each URL is converted at most once for its lifetime. `?refresh=1` forces a
-  re-conversion. Failures return `502`/`406` and are never written to R2. Input over ~4 MiB is
-  rejected fast by `MAX_INPUT_CHARS` — the service otherwise hangs ~41 s before erroring.
+- **Always pass the fetched HTML string, never let the converter fetch the URL.**
+  `/html/` and `/wechat/` depend on a custom User-Agent (default iOS WeChat) plus Referer to retrieve bodies; only the Worker can do that.
+  The converter receives the already-fetched HTML as a blob.
+- **Relative URLs are resolved by injecting a `<base href>` tag.**
+  After `buildRewriter()` every `<a href>` is `/html/<abs>` and every media attribute is `/proxy/<abs>`, so no page-relative links remain; pointing the base at this Worker's origin absolutises both internal path families.
+  `conversionOptions.html.hostname` is deliberately *not* used — it works over REST but is silently ignored through the Workers AI binding (verified on x-dev: 78 links emitted relative).
+  The converter still drops `srcset` and `data-src`-only images, which is why `buildRewriter()`'s srcset/`data-src`→`src` backfill must stay.
+- **Results must be cached in R2** under `md/<route>/<target>`.
+  HTML conversion is deterministic and model-free (0 Neurons), but a single page takes 130–330 ms and ~8% of requests show a 48–100 s tail, so each URL is converted at most once for its lifetime.
+  `?refresh=1` forces a re-conversion.
+  Failures return `502`/`406` and are never written to R2.
+  Input over ~4 MiB is rejected fast by `MAX_INPUT_CHARS` — the service otherwise hangs ~41 s before erroring.
 
-`/wechat/` additionally strips two blocks of client-injected DOM off the **markdown variant only**:
-`toMarkdown` does not honour `display:none`, so elements WeChat renders invisible still get extracted.
+`/wechat/` additionally strips two blocks of client-injected DOM off the **markdown variant only**: `toMarkdown` does not honour `display:none`, so elements WeChat renders invisible still get extracted.
 `routes/wechat.js` removes
 
 - the footer chrome, by truncating at `<div id="js_tags_preview_toast">` — the anchor for the
   "预览时标签不可点" toast, present exactly once per document, with the bottom toolbar (修改于 /
   不喜欢), QR-code dialogs and share panel after it
-- the novel-reader promo card, by slicing from `<div id="js_novel_card">` up to the `#js_content`
-  opening tag — the card's closing tag sits directly before `#js_content`, so no div-depth counting
-  is needed. The byline (`#meta_content`, `#js_profile_card`) sits before the card and is kept
+- the novel-reader promo card, by slicing from `<div id="js_novel_card">` up to the `#js_content` opening tag — the card's closing tag sits directly before `#js_content`, so no div-depth counting is needed.
+  The byline (`#meta_content`, `#js_profile_card`) sits before the card and is kept
 
 Both anchors are WeChat client JS-hook ids rather than text content — ids are stable, copy is not.
-The HTML variant is left intact: those divs carry `display:none` and are invisible there anyway, and
-trimming would change the route's faithful-rendering behaviour. This is why `serveHtml`'s `transform`
-hook takes an `isMarkdown` flag.
-
+The HTML variant is left intact: those divs carry `display:none` and are invisible there anyway, and trimming would change the route's faithful-rendering behaviour.
+This is why `serveHtml`'s `transform` hook takes an `isMarkdown` flag.
 
 ## Externalized Assets (`/assets/` routes)
 
-Browser-served CSS/JS are external (not inlined) so that a Feishu doc with
-dozens of iframes shares one copy via browser HTTP cache. Worker imports them
-via the `Text` module rule and serves at `/assets/<name>` with
-`Cache-Control: public, max-age=31556952, immutable`.
+Browser-served CSS/JS are external (not inlined) so that a Feishu doc with dozens of iframes shares one copy via browser HTTP cache.
+Worker imports them via the `Text` module rule and serves at `/assets/<name>` with `Cache-Control: public, max-age=31556952, immutable`.
 
-| Asset             | Source                                  | Served at                | Used by routes |
-| ----------------- | --------------------------------------- | ------------------------ | -------------- |
-| `assets/twitter.css` | repo (trimmed water.css subset + twitter rules) | `/assets/twitter.css` | tweet        |
-| `assets/github.css`  | repo (trimmed water.css subset + hljs theme + `.gh-*`) | `/assets/github.css`  | github       |
-| `artplayer.mjs`   | CI-generated from `artplayer.js` (jsdelivr) | `/assets/artplayer.js` | video       |
+| Asset                | Source                                                 | Served at              | Used by routes |
+| -------------------- | ------------------------------------------------------ | ---------------------- | -------------- |
+| `assets/twitter.css` | repo (trimmed water.css subset + twitter rules)        | `/assets/twitter.css`  | tweet          |
+| `assets/github.css`  | repo (trimmed water.css subset + hljs theme + `.gh-*`) | `/assets/github.css`   | github         |
+| `artplayer.mjs`      | CI-generated from `artplayer.js` (jsdelivr)            | `/assets/artplayer.js` | video          |
 
 The trimmed "water" subset in `assets/*.css` keeps only the box model +
 typography rules actually emitted by the routes (`:root` vars, `h1-h6/p/a/ul/li/
@@ -137,38 +151,33 @@ blockquote/table/pre/code/hr/img/video/strong`, scrollbars); all form controls
 (`button/input/select/textarea`), `details/summary/dialog`, `label/fieldset`,
 `@media print`, and `mailto:/sms:/tel:` decoration are removed.
 
-`artplayer.mjs` is built as an ESM default-exported string (`export default "<JSON-escaped source>"`)
-to avoid backticks/`${` breaking template literals. `markdown-it.mjs` and
-`highlight.mjs` remain Worker-side only (SSR rendering) and are not served to
-the browser.
+`artplayer.mjs` is built as an ESM default-exported string (`export default "<JSON-escaped source>"`) to avoid backticks/`${` breaking template literals.
+`markdown-it.mjs` and `highlight.mjs` remain Worker-side only (SSR rendering) and are not served to the browser.
 
 ### CI Pipeline (`.github/workflows/deploy.yaml`)
 
-1. `npx wrangler deploy` — Wrangler runs the `[build]` command (`sh build.sh`) first, which downloads and builds all remote assets (artplayer, markdown-it, highlight.js), then deploys. `assets/*.css` are committed to the repo and not rebuilt.
+1. `npx wrangler deploy` — Wrangler runs the `[build]` command (`sh build.sh`) first, which downloads and builds all remote assets (artplayer, markdown-it, highlight.js), then deploys.
+   `assets/*.css` are committed to the repo and not rebuilt.
 2. Re-enables the Worker Cache runtime setting via API (Wrangler resets it on each deploy).
 
 Trigger paths: push to `worker.js`, `routes/**`, `lib/**`, `assets/**`, `wrangler.toml`, `build.sh`, `deploy.yaml`; or `workflow_dispatch`.
 
 ## Vars
 
-| Var            | Purpose |
-| -------------- | ------- |
-| `TIMEZONE`     | Tweet timestamp display timezone |
-| `TWITTER_LANG` | BCP-47 language for tweet translation; blank = original. `?lang=` on the URL overrides it |
+| Var                     | Purpose |
+| ----------------------- | ------- |
+| `TIMEZONE`              | Tweet timestamp display timezone |
+| `TWITTER_LANG`          | BCP-47 language for tweet translation; blank = original. `?lang=` on the URL overrides it |
 | `TWITTER_PREWARM_LANGS` | Comma-separated BCP-47 list the Telegram bot prewarms (`tweet/<id>.<lang>.json` per language); blank = fall back to `TWITTER_LANG`. Bot prewarm only, does not affect `serveTweet` default rendering |
-| `GITHUB_TOKEN` | Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
-| `UA`           | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
+| `GITHUB_TOKEN`          | Optional GitHub PAT for `/github/` route to raise the API rate limit (60/h → 5000/h); blank = unauthenticated (public repos only) |
+| `UA`                    | User-Agent override for `/html/` fetches; defaults to iOS WeChat UA |
 
-Bindings: `env.TWEETS` → R2 bucket `x-page` / `x-page-dev` (keys `tweet/`, `wechat/`, `md/`);
-`env.AI` → Workers AI, used only for the markdown conversion. `toMarkdown()` on HTML is
-deterministic and model-free, so it consumes 0 Neurons and never touches the free plan's
-10,000 Neurons/day pool (verified on this free account, 2026-10). Note the markdown conversion
-feature carries a **Beta** badge in the Cloudflare docs nav — Workers AI itself is GA.
+Bindings: `env.TWEETS` → R2 bucket `x-page` / `x-page-dev` (keys `tweet/`, `wechat/`, `md/`); `env.AI` → Workers AI, used only for the markdown conversion.
+`toMarkdown()` on HTML is deterministic and model-free, so it consumes 0 Neurons and never touches the free plan's 10,000 Neurons/day pool (verified on this free account, 2026-10).
+Note the markdown conversion feature carries a **Beta** badge in the Cloudflare docs nav — Workers AI itself is GA.
 
-Telegram bot secrets (`BOT_TOKEN`, `WEBHOOK_SECRET`, `IMGUR_CLIENTID`, `IMGBB_API_KEY`,
-`X_PAGE_BASE`, `ALLOWED_CHATS`) are set via `wrangler secret put` and read by the `/webhook`
-route (`routes/webhook.js`). See `README.md` → Telegram 转换 Bot.
-
+Telegram bot secrets (`BOT_TOKEN`, `WEBHOOK_SECRET`, `IMGUR_CLIENTID`, `IMGBB_API_KEY`, `X_PAGE_BASE`, `ALLOWED_CHATS`) are set via `wrangler secret put` and read by the `/webhook` route (`routes/webhook.js`).
+See `README.md` → Telegram 转换 Bot.
 
 ### Local Development
 
@@ -183,18 +192,22 @@ npx wrangler dev
 **Two-stage deploy: debug worker first, then production.**
 
 1. **Debug stage** — create a separate `x-dev` Worker for testing changes:
+
    ```bash
    # Copy wrangler.toml → wrangler.dev.toml, change name to "x-dev" and route to a dev hostname
    npx wrangler deploy --config wrangler.dev.toml
    ```
+
    Verify every route on the dev hostname before touching production.
 
 2. **Production stage** — only after dev passes:
+
    ```bash
    npx wrangler deploy
    ```
 
-**Do NOT wait for the GitHub Actions `Deploy` workflow to pass** — it is frequently slow / queued for minutes and is not a reliable gate. Deploy via Wrangler directly for both stages.
+**Do NOT wait for the GitHub Actions `Deploy` workflow to pass** — it is frequently slow / queued for minutes and is not a reliable gate.
+Deploy via Wrangler directly for both stages.
 
 ```bash
 # Debug on x-dev first
@@ -219,8 +232,8 @@ npx wrangler dev
 
 - Vanilla ES module JS.
   No TypeScript, no bundler, no linter.
-- 2-space indent. `worker.js` is the router only; services live
-  in `routes/`, shared helpers in `lib/`.
+- 2-space indent.
+  `worker.js` is the router only; services live in `routes/`, shared helpers in `lib/`.
 - User-supplied URLs are appended raw at the edge.
   Only `encodeURIComponent` when the URL contains `?`, `#`, space, or non-ASCII.
   When unsure, always encoding is safe.
@@ -248,7 +261,9 @@ rules = [{ type = "Text", globs = ["**/*.css"], fallthrough = true }]
 
 **踩坑症状**：wrangler 部署时打印 `Unexpected fields found in r2_buckets[0] field: "rules"`，CSS/其他 Text 模块没被打包，Worker 里 `import TWITTER_CSS from "./assets/twitter.css"` 拿到的是空对象，`/assets/` 返回的 CSS 直接渲染成 `[object Object]` 字符串 —— 页面样式完全丢掉。
 
-**为什么裸形式有时能用**：TOML 规定紧跟 `[[array]]` 项后、未被更上一级 `[table]` 切分前，裸字段都属于那个数组项。当 `wrangler.toml` 只有一个 `rules = [...]` 而没有其他 `[[xxx]]` 块时，它属于顶层 worker-config 表，能正常工作；**一旦加上 `[[r2_buckets]]` 等块且顺序在 rules 之前/之后无 `[table]` 切分，rules 就被吞掉**。
+**为什么裸形式有时能用**：TOML 规定紧跟 `[[array]]` 项后、未被更上一级 `[table]` 切分前，裸字段都属于那个数组项。
+当 `wrangler.toml` 只有一个 `rules = [...]` 而没有其他 `[[xxx]]` 块时，它属于顶层 worker-config 表，能正常工作。
+**一旦加上 `[[r2_buckets]]` 等块且顺序在 rules 之前/之后无 `[table]` 切分，rules 就被吞掉**。
 
 **修复**：所有 wrangler config（prod + dev）一律用 `[[rules]]` 数组表头形式，并把 `[[rules]]` 放在其他 `[[array]]` 块之前。
 
@@ -269,15 +284,23 @@ Validate manually: `npx wrangler dev` then curl/navigate each route prefix; use 
 
 ## OpenWiki
 
-This repository has a generated `openwiki/` evidence index. It is optional just-in-time context, not required startup reading.
+This repository has a generated `openwiki/` evidence index.
+It is optional just-in-time context, not required startup reading.
 
-- Do not enumerate, preload, or search wikis at task start. Use retrieval when the user asks for it, when unfamiliar architecture or dependency behavior materially affects the task, or when source inspection leaves an important uncertainty. Stop once the question is grounded.
-- When those conditions apply and OpenWiki retrieval tools are available, use `openwiki_search` for just-in-time context and `openwiki_read` for the relevant complete sections. If search returns `workspace_required`, ask which listed workspace to use and retry with its ID.
+- Do not enumerate, preload, or search wikis at task start.
+  Use retrieval when the user asks for it, when unfamiliar architecture or dependency behavior materially affects the task, or when source inspection leaves an important uncertainty.
+  Stop once the question is grounded.
+- When those conditions apply and OpenWiki retrieval tools are available, use `openwiki_search` for just-in-time context and `openwiki_read` for the relevant complete sections.
+  If search returns `workspace_required`, ask which listed workspace to use and retry with its ID.
 - Use `openwiki_list_workspaces` or `openwiki_list_wikis` when workspace membership itself needs to be discovered.
 - If the retrieval tools are unavailable, read `openwiki/quickstart.md` and follow its links to the relevant pages.
-- Treat source code and tests as authoritative. A brief's unknowns and review items are verification gaps, not automatic requirements.
-- Prefer the narrowest quiet validation that proves the changed behavior. Preserve complete failure output.
+- Treat source code and tests as authoritative.
+  A brief's unknowns and review items are verification gaps, not automatic requirements.
+- Prefer the narrowest quiet validation that proves the changed behavior.
+  Preserve complete failure output.
 
-Use the repository's documented maintenance process to refresh generated pages after source changes. Check its configuration and completed runs before relying on automatic updates. Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
+Use the repository's documented maintenance process to refresh generated pages after source changes.
+Check its configuration and completed runs before relying on automatic updates.
+Do not hand-edit generated OpenWiki pages unless explicitly asked; prefer updating source code/docs and letting OpenWiki regenerate.
 
 <!-- OPENWIKI:END -->

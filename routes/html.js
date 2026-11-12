@@ -39,6 +39,7 @@
 
 import { proxyUrl } from "../lib/utils.js";
 import { convertHtml, markdownResponse } from "../lib/to-markdown.js";
+import { resolveSiteHack, applySiteHack } from "../lib/site-hacks/index.js";
 
 // 默认 UA：iOS 微信内置浏览器，可通过 wrangler.toml [vars] UA 覆盖
 const DEFAULT_UA =
@@ -120,7 +121,6 @@ function rewriteCssUrls(text, base) {
  */
 function buildRewriter(base) {
   const rewriter = new HTMLRewriter();
-
   // 代理单个普通属性（src / href / data-src / poster / data）
   //
   // 注意：JS / CSS 也需要代理！
@@ -231,6 +231,20 @@ function buildRewriter(base) {
 }
 
 /**
+ * 从完整 URL 里安全取出 hostname，取不到返回空串。
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function safeHost(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+/**
  * 抓取上游页面。/html/ 与 /wechat/ 都靠自定义 UA + Referer 才能绕过
  * 微信白名单，两条管线共用同一套请求头，抽出来避免两边各写一份而漂移。
  *
@@ -307,6 +321,9 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
       status: 502,
     });
   }
+  // 站点专属 hack：在缓冲好的完整 HTML 上做精确中和（如 openrouter 的
+  // 反镜像脚本）。整篇字符串后处理，对 HTMLRewriter 的 chunk 切分免疫。
+  html = applySiteHack(html, resolveSiteHack(safeHost(target)));
   // isMarkdown=true：钩子需要知道走的是哪条管线，/wechat/ 据此只做
   // Markdown 变体才需要的清理（HTML 视图里页脚本来就该保留）。
   if (transform) html = transform(html, target, true);
@@ -396,25 +413,31 @@ export async function serveHtml(request, env, ctx, transform, prefix = "/html/")
   try {
     // HTML：用 HTMLRewriter 流式改写资源路径
     const rewriter = buildRewriter(target);
+    // 站点专属 hack（如 openrouter 反镜像脚本）需要拿到缓冲好的完整
+    // HTML 才能整篇正则中和，命中时即使无 transform 钩子也强制缓冲。
+    const hack = resolveSiteHack(safeHost(target));
 
-    if (transform) {
-      // 有后处理钩子（如 /wechat/ 包标题链接）：需缓冲后应用
+    if (transform || hack) {
+      // 有后处理钩子（如 /wechat/ 包标题链接）或命中站点 hack：需缓冲后应用
       const transformed = rewriter.transform(
         new Response(upstream.body, { status: upstream.status, headers })
       );
-      const html = await transformed.text();
-      const finalHtml = transform(html, target, false);
-      return new Response(finalHtml, { status: upstream.status, headers });
+      let html = await transformed.text();
+      html = applySiteHack(html, hack);
+      if (transform) html = transform(html, target, false);
+      return new Response(html, { status: upstream.status, headers });
     }
 
-    // 无钩子：直接流式输出，零额外内存
+    // 无钩子、无 hack：直接流式输出，零额外内存
     return rewriter.transform(
       new Response(upstream.body, { status: upstream.status, headers })
     );
   } catch (e) {
-    // 改写失败时降级：重新请求一次，直接返回原始 HTML，保证页面至少能看
+    // 改写失败时降级：重新请求一次，直接返回原始 HTML，保证页面至少能看。
+    // 降级路径同样要上站点 hack，否则命中站点会重新暴露反镜像跳转。
     const fallback = await fetchUpstream(target, ua);
-    const rawHtml = await fallback.text();
+    let rawHtml = await fallback.text();
+    rawHtml = applySiteHack(rawHtml, resolveSiteHack(safeHost(target)));
     const finalHtml = transform ? transform(rawHtml, target, false) : rawHtml;
     return new Response(finalHtml, { status: upstream.status, headers });
   }
