@@ -18,6 +18,7 @@
  *   /vid/  /vid/d/  视频代理 / 直连
  *   /img/  /img/d/  图片代理 / 直连
  *   /html/          HTML 抓取 + 改写代理（自定义 UA、防盗链）
+ *   /r2-html/       同 /html/，HTML 视图额外缓存 R2
  *   /wechat/        微信公众号文章专用（标题可点回原文）
  *   /proxy/         通用媒体代理
  *   /github/        GitHub README 渲染（/assets/github.css）

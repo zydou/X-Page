@@ -53,7 +53,7 @@ x-page/
 | `/img/<raw-url>`                        | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
 | `/img/d/<raw-url>`                      | Image → adaptive HTML (direct) |
 | `/html/<raw-url>`                       | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs); `Accept: text/markdown` → markdown |
-| `/r2-html/<raw-url>`                    | Same as `/html/` + R2 persistent cache for the HTML view (`r2html/<target>`, permanent, no refresh); `Accept: text/markdown` → markdown (cached under `md/r2-html/<target>`) |
+| `/r2-html/<raw-url>`                    | Same as `/html/` + R2 persistent cache for the HTML view (`html/<target>`, permanent, no refresh); `Accept: text/markdown` → markdown (cached under `md/html/<target>`, shared with `/html/`) |
 | `/wechat/<raw-url>`                     | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
 | `/proxy/<raw-url>`                      | Generic passthrough proxy; rewrites JS/CSS relative URLs |
 | `/github/<user>/<repo>[/<path>]`        | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
@@ -116,7 +116,7 @@ The tweet route renders markdown from fxtwitter data itself.
   After `buildRewriter()` every `<a href>` is `/html/<abs>` and every media attribute is `/proxy/<abs>`, so no page-relative links remain; pointing the base at this Worker's origin absolutises both internal path families.
   `conversionOptions.html.hostname` is deliberately *not* used — it works over REST but is silently ignored through the Workers AI binding (verified on x-dev: 78 links emitted relative).
   The converter still drops `srcset` and `data-src`-only images, which is why `buildRewriter()`'s srcset/`data-src`→`src` backfill must stay.
-- **Results must be cached in R2** under `md/<route>/<target>`.
+- **Results must be cached in R2** under `md/<ns>/<target>`, where `<ns>` is `html` (shared by `/html/` and `/r2-html/`, identical output) or `wechat` (`/wechat/`, transform-trimmed output).
   HTML conversion is deterministic and model-free (0 Neurons), but a single page takes 130–330 ms and ~8% of requests show a 48–100 s tail, so each URL is converted at most once for its lifetime.
   `?refresh=1` forces a re-conversion.
   Failures return `502`/`406` and are never written to R2.

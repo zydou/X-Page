@@ -117,11 +117,11 @@ https://<your-worker-domain>/html/<URL>
 https://<your-worker-domain>/r2-html/<URL>
 ```
 
-与 `/html/` 功能完全一致，区别是 HTML 视图会缓存到 R2：先查 R2（key `r2html/<URL>`），命中直接返回；未命中才抓取并后台写回 R2。
+与 `/html/` 功能完全一致，区别是 HTML 视图会缓存到 R2：先查 R2（key `html/<URL>`），命中直接返回；未命中才抓取并后台写回 R2。
 
 - 原文失效（被删 / 改版）后链接依然可读，内容以首次抓取为准
 - 重复访问省一次上游抓取
-- `Accept: text/markdown` 同样支持，Markdown 变体缓存在独立的 `md/r2-html/<URL>` 下
+- `Accept: text/markdown` 同样支持，Markdown 变体与 `/html/` 共用 `md/html/<URL>` 缓存（产物相同，任一路由转换过、另一路由直接命中）
 
 ### 💬 微信公众号文章
 

@@ -21,11 +21,12 @@ fallthrough = true
 #   tweet/<id>.json        → fxtwitter thread JSON（未翻译）
 #   tweet/<id>.<lang>.json → 带翻译的 thread JSON（?lang= 或 TWITTER_LANG），每种语言一份
 #   wechat/<原文URL>       → 渲染后的完整 HTML（wechat 路由，防原文删除后失效）
+#   html/<原文URL>         → 渲染后的完整 HTML（r2-html 路由，防原文删除后失效）
 # lifecycle 规则（已通过 CLI 配置）：
 #   tweet/ 前缀 365 天过期：
 #     npx wrangler r2 bucket lifecycle add x-page expire-tweets-after-1y tweet/ --expire-days 365
-#   wechat/ 前缀无过期规则，默认永久保留（防失效优先）
-#   md/ 前缀（/html/ 与 /wechat/ 的 text/markdown 变体）同样永久保留：
+#   wechat/ 与 html/ 前缀无过期规则，默认永久保留（防失效优先）
+#   md/ 前缀（md/html/ 供 /html/ 与 /r2-html/，md/wechat/ 供 /wechat/ 的 text/markdown 变体）同样永久保留：
 #     转换本身零配额，但单篇 130-330ms、约 8% 有 48-100 秒长尾，
 #     让每个 URL 一生只转换一次可以把重复请求的延迟从秒级压到毫秒级。
 #     需要强刷新用 ?refresh= 重转。

@@ -193,9 +193,9 @@ export async function serveWechat(request, env, ctx) {
   if (!/^https?:\/\//i.test(target)) target = "http://" + target;
 
   // Markdown 协商必须先短路：下面 R2 命中分支会无视 Accept 直接返回缓存 HTML。
-  // 交给 serveHtml 的独立管线处理，它按路由前缀隔离出自己的 md/wechat/ R2 key。
+  // 交给 serveHtml 的独立管线处理，它按 mdNs 隔离出自己的 md/wechat/ R2 key（裁剪过的产物不能与 /html/ 共用）。
   if ((request.headers.get("accept") || "").includes("text/markdown")) {
-    return serveHtml(request, env, ctx, transformWechat, "/wechat/");
+    return serveHtml(request, env, ctx, transformWechat, "/wechat/", "wechat");
   }
 
   // R2 key：直接用原文 URL 作为唯一标识（R2 key 支持任意 UTF-8 字符串）
@@ -225,7 +225,7 @@ export async function serveWechat(request, env, ctx) {
   }
 
   // 第二步：R2 miss → 抓取 + 渲染（复用 /html/ 的 serveHtml）
-  const resp = await serveHtml(request, env, ctx, transformWechat, "/wechat/");
+  const resp = await serveHtml(request, env, ctx, transformWechat, "/wechat/", "wechat");
   if (!resp.ok) return resp;
 
   const html = await resp.text();
@@ -282,7 +282,7 @@ export async function prewarmWechat(target, env, ctx) {
   const ua = (env && env.UA) || "Mozilla/5.0";
   // 复用 serveHtml 的抓取与改写：构造仅供解析用的 Request，路径塞 encode 后的 target
   const fakeRequest = new Request(`https://__prewarm__/wechat/${encodeURIComponent(target)}`);
-  const resp = await serveHtml(fakeRequest, env, ctx, transformWechat, "/wechat/");
+  const resp = await serveHtml(fakeRequest, env, ctx, transformWechat, "/wechat/", "wechat");
   if (!resp.ok) return false;
 
   const html = await resp.text();

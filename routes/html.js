@@ -279,11 +279,12 @@ async function fetchUpstream(target, ua) {
  *
  * @returns {Response}
  */
-async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
+async function serveMarkdown(request, env, ctx, target, mdNs, transform, ua) {
   const url = new URL(request.url);
   const bucket = env && env.TWEETS;
-  // 按路由前缀隔离 key，/html/ 与 /wechat/ 的转换结果互不覆盖
-  const mdKey = "md/" + prefix.replace(/\/+/g, "") + "/" + target;
+  // 按内容变体隔离 key：同一产物的路由共用一个命名空间（/html/ 与 /r2-html/ 都是 "html"），
+  // 经 transform 裁剪过的 /wechat/ 产物不同，单独用 "wechat"
+  const mdKey = "md/" + mdNs + "/" + target;
   // ?refresh= 强制重新转换，是 R2 永不过期带来的唯一逃生口
   const refresh = url.searchParams.has("refresh");
 
@@ -361,10 +362,12 @@ async function serveMarkdown(request, env, ctx, target, prefix, transform, ua) {
  * @param {(html: string, target: string, isMarkdown: boolean) => string} [transform]
  *   对最终 HTML 的可选改写钩子。第三个参数标明走的是 Markdown 管线还是
  *   HTML 管线，钩子据此做只有某一管线才需要的处理。
- * @param {string} [prefix="/html/"] 路由前缀，调用方按自己路径传入（如 "/wechat/"）
+ * @param {string} [prefix="/html/"] 路由前缀，调用方按自己路径传入（如 "/r2-html/"、"/wechat/"）
+ * @param {string} [mdNs="html"] Markdown 变体的 R2 命名空间（md/<mdNs>/<target>）。
+ *   同一产物的路由共用一个值；经 transform 裁剪的产物必须传各自的值（/wechat/ 传 "wechat"）
  * @returns {Response}
  */
-export async function serveHtml(request, env, ctx, transform, prefix = "/html/") {
+export async function serveHtml(request, env, ctx, transform, prefix = "/html/", mdNs = "html") {
   const url = new URL(request.url);
   const encoded = url.pathname.slice(prefix.length);
   if (!encoded) return new Response("missing url", { status: 400 });
@@ -383,7 +386,7 @@ export async function serveHtml(request, env, ctx, transform, prefix = "/html/")
 
   // Accept: text/markdown → 走独立管线（R2 命中时完全不碰上游）
   if ((request.headers.get("accept") || "").includes("text/markdown")) {
-    return serveMarkdown(request, env, ctx, target, prefix, transform, ua);
+    return serveMarkdown(request, env, ctx, target, mdNs, transform, ua);
   }
 
   const upstream = await fetchUpstream(target, ua);
@@ -446,14 +449,14 @@ export async function serveHtml(request, env, ctx, transform, prefix = "/html/")
 /**
  * 处理 /r2-html/<encoded> 请求：与 /html/ 完全相同，外加一层 R2 持久缓存。
  *
- * 与 /html/ 的唯一差异：HTML 视图先查 R2（key = `r2html/<原文URL>`），
+ * 与 /html/ 的唯一差异：HTML 视图先查 R2（key = `html/<原文URL>`），
  * 命中直接返回；miss 才走 serveHtml 抓取 + 改写，后台把最终 HTML 写回 R2。
  * 好处与 /wechat/ 一致——原文失效后链接仍可读，且重复访问省一次上游抓取。
  *
  * 两条管线分开看：
- *   - HTML 视图：本函数负责的 R2 缓存（r2html/ 前缀）
+ *   - HTML 视图：本函数负责的 R2 缓存（html/ 前缀）
  *   - Markdown 变体：短路给 serveHtml 自带的 serveMarkdown，它有自己的
- *     `md/r2-html/<target>` R2 key（按前缀隔离），与 HTML 视图互不干扰
+ *     `md/html/<target>` R2 key（与 /html/ 共用，产物相同），与 HTML 视图互不干扰
  *
  * Markdown 协商必须先短路：下面 R2 命中分支会无视 Accept 直接返回缓存 HTML，
  * 否则一个要 Markdown 的客户端会拿到缓存 HTML。
@@ -462,7 +465,7 @@ export async function serveHtml(request, env, ctx, transform, prefix = "/html/")
  *   - R2 是永久真相源，命中不做应用层过期判断
  *   - 无 refresh 入口：命中即缓存，内容以首次抓取为准（防失效优先）
  *   - 只缓存 text/html 响应；Markdown 变体与非 HTML 透传（文件下载/纯文本）不进
- *     r2html/ 前缀
+ *     html/ 前缀
  *   - 写回不阻塞响应（ctx.waitUntil 后台执行），失败静默忽略
  *   - 边缘 no-store：R2 已是永久真相源，边缘副本在本账号 purge 不掉
  *
@@ -485,14 +488,14 @@ export async function serveR2Html(request, env, ctx) {
   }
   if (!/^https?:\/\//i.test(target)) target = "http://" + target;
 
-  // Markdown 协商先短路：交给 serveHtml 的独立管线，它按前缀隔离出自己的
-  // md/r2-html/ R2 key，与下面 HTML 视图的 r2html/ 缓存互不覆盖。
+  // Markdown 协商先短路：交给 serveHtml 的独立管线，它的 md/html/ R2 key 与 /html/ 共用，
+  // 与下面 HTML 视图的 html/ 缓存互不覆盖（同名前缀不同层：md/ 与顶层 html/）。
   if ((request.headers.get("accept") || "").includes("text/markdown")) {
     return serveHtml(request, env, ctx, null, "/r2-html/");
   }
 
   // R2 key：用原文 URL 作唯一标识（R2 key 支持任意 UTF-8 字符串）
-  const r2Key = "r2html/" + target;
+  const r2Key = "html/" + target;
 
   // 第一步：命中 R2 直接返回缓存（原文失效后依然可读）
   if (env?.TWEETS) {
