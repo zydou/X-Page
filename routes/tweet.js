@@ -300,6 +300,27 @@ function stripArticleLink(text, article) {
 }
 
 /**
+ * 判断一条推是否是「纯引用壳」：作者没写任何正文，body 只剩指向它自己
+ * 引用推的那条链接。这是串推作者用「引用旧推」续链的典型写法
+ * （如 arena 的 weekly thread），若照常渲染会多出一条只有裸链接的空条目。
+ *
+ * 判定：有引用推，且正文剔除引用 URL 后已无任何实质内容。
+ * 引用 URL 缺失或正文还有别的话时都返回 false，按普通推渲染（宁可不折叠）。
+ *
+ * @param {Object|null} post fxtwitter 单条推文对象
+ * @returns {boolean}
+ */
+function isQuoteOnlyShell(post) {
+  if (!post?.quote) return false;
+  const quoteUrl = post.quote.url || "";
+  if (!quoteUrl) return false;
+  const raw = post.html_no_media || post.translation?.text || post.text || "";
+  const body = stripArticleLink(raw, post.article).trim();
+  if (!body) return false; // 连链接都没有的真空推不在此处理
+  return body.split(quoteUrl).join("").trim() === "";
+}
+
+/**
  * 渲染单条推文为 HTML 片段：头部 + 正文 + 长文 + 媒体画廊 + 可选引用。
  *
  * 本推、串推、引用推文共用同一套渲染逻辑。此前主循环与 quote 块是两段
@@ -310,6 +331,9 @@ function stripArticleLink(text, article) {
  *   - 正文推文 → parseArticle 全量渲染
  *   - 引用推文 → 仅标题《…》+ preview_text 摘要，避免长文撑爆页面
  *
+ * 纯引用壳（isQuoteOnlyShell）直接跳过壳本身的头部与裸链接，只渲染被引用
+ * 推的内容——否则串推里会夹着一条只有裸链接的空条目。
+ *
  * @param {Object|null} post fxtwitter 返回的单条推文对象
  * @param {{url: string, tz: string, refreshUrl: string}} opt 渲染上下文：url = 无 url 字段时的回退链接，tz = 时区，refreshUrl = 刷新按钮链接
  * @param {boolean} [opt.withQuote] 是否展开该推的引用推文（仅展开一层）
@@ -319,6 +343,12 @@ function stripArticleLink(text, article) {
 function renderPost(post, opt) {
   if (!post || isTombstone(post)) return "";
   const { url: fallbackUrl, tz, refreshUrl, withQuote = false, articlePreview = false } = opt;
+
+  // 纯引用壳：剥掉空壳，直接渲染被引用推（只一层，不再递归展开引用的引用）
+  if (isQuoteOnlyShell(post)) {
+    return renderPost(post.quote, { url: fallbackUrl, tz, refreshUrl, articlePreview: true });
+  }
+
   const author = post.author && post.author.name ? post.author.name : "Anonymous";
   const tweetUrl = post.url || fallbackUrl;
   const avatarUrl = proxyUrl(post.author && post.author.avatar_url ? post.author.avatar_url : "");
@@ -437,6 +467,12 @@ export function wrapHtml(fullHtml, thisAuthor) {
 function renderPostMarkdown(post, opt) {
   if (!post || isTombstone(post)) return "";
   const { tz, refreshUrl, withQuote = false, articlePreview = false, isQuote = false } = opt;
+
+  // 纯引用壳：剥掉空壳，直接渲染被引用推（与 HTML 渲染保持同一行为）
+  if (isQuoteOnlyShell(post)) {
+    return renderPostMarkdown(post.quote, { ...opt, articlePreview: true, isQuote: true });
+  }
+
   const author = post.author && post.author.name ? post.author.name : "Anonymous";
   const tweetUrl = post.url || opt.url || "";
   const avatarUrl = post.author && post.author.avatar_url ? post.author.avatar_url : "";
