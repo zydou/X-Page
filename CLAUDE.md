@@ -299,3 +299,22 @@ Use the repository's documented maintenance process to refresh generated pages a
 
 <!-- OPENWIKI:END -->
 <!-- rumdl-enable MD013 -->
+
+## OpenWiki 更新时机
+
+OpenWiki 是带 git 基线的证据索引，每页 frontmatter 的 `sources` 声明了它依赖的源文件。
+
+判断是否需要更新时，以各页 `sources` 为准，而不是看有没有新 commit。
+
+- 需要更新：改动了某页 `sources` 中的源文件，并且改变了该页描述的行为，例如路由、R2 key 与生命周期、绑定、vars、secrets、bot 回复选项、Markdown 管线或站点 hack 注册表。
+- 也需要更新：只调整了这些源文件的位置（如注释、插入代码），导致页面中的行号引用或 claim 证据失效。
+- 不需要更新：只改动了未被任何页面声明为 source 的文件，例如 README.md、CLAUDE.md、wrangler.dev.toml，或只做与行为无关的格式调整。
+- 不必每个 commit 都更新：攒一批行为改动后统一刷新，可以减少 claim 的核对量。
+
+执行方式：
+
+- 先运行 `openwiki_begin`（mode update）。返回 `noop` 即无需更新；否则依据返回的 `changedPaths` 与 `claimIssues` 执行。
+- 按生命周期推进：`openwiki_submit_plan` → 循环 `openwiki_next_page`、修改页面、`openwiki_submit_page` → `openwiki_finish`。每条 stale claim 都必须明确 confirm、revise 或 retract。
+- 不手改生成页面，页面内容只通过上述生命周期修改。
+- OpenWiki 产物单独提交，使用 `docs(openwiki): ...`，不与代码改动混在同一个 commit 中。
+- 不手改 `OPENWIKI:START` 与 `OPENWIKI:END` 之间的内容，也不删除其外层的 rumdl 区域标记。
