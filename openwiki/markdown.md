@@ -1,11 +1,11 @@
 ---
 type: 子系统
 title: Markdown 转换
-description: 解释三条路由的 Markdown 变体生成、约束与缓存机制
+description: 解释四条路由的 Markdown 变体生成、约束与缓存机制
 tags: [Markdown, 内容协商, Workers AI, R2缓存]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T10:39:10.208Z
+    at: 2026-11-12T05:54:32.565Z
 sources:
   - id: openwiki-source-8a2e26d4137b8250f68bb869
     resource: repo://build.sh
@@ -15,23 +15,25 @@ sources:
     resource: repo://lib/to-markdown.js
   - id: openwiki-source-191ac1117a045536f59c18b2
     resource: repo://routes/html.js
-generated: { by: "claude-code", at: "2026-11-10T10:39:10.208Z" }
+  - id: openwiki-source-3e61b3820564ba3d588667cf
+    resource: repo://routes/wechat.js
+generated: { by: "claude-code", at: "2026-11-12T05:54:32.565Z" }
 ---
 
 # Markdown 转换
 
-x-page 支持在三条路由上按 `Accept: text/markdown` 内容协商返回 Markdown 文本：`/<user>/status/<id>`、`/html/<url>`、`/wechat/<url>`。Markdown 是为 Agent / CLI 消费的轻量表示，与 HTML 双轨并行。
+x-page 支持在四条路由上按 `Accept: text/markdown` 内容协商返回 Markdown 文本：`/<user>/status/<id>`、`/html/<url>`、`/r2-html/<url>`、`/wechat/<url>`。Markdown 是为 Agent / CLI 消费的轻量表示，与 HTML 双轨并行。
 
 ## 1 内容协商总则
 
 > [!IMPORTANT]
-> 三个 Markdown 分支都设 `Vary: Accept`——同一 URL 存在 HTML / Markdown 两种表示，不带这个头边缘缓存会把 HTML 喂给要 Markdown 的客户端（`routes/tweet.js:672`、`routes/html.js:389`、`lib/to-markdown.js:147`）。`GET /<...>/status/<id>` 与 `/html/` `/wechat/` 的 HTML 默认也带 `Vary: Accept` 保持一致。
+> 四个 Markdown 分支都设 `Vary: Accept`——同一 URL 存在 HTML / Markdown 两种表示，不带这个头边缘缓存会把 HTML 喂给要 Markdown 的客户端（`routes/tweet.js:672`、`routes/html.js:409`、`lib/to-markdown.js:147`）。`GET /<...>/status/<id>` 与 `/html/` `/r2-html/` `/wechat/` 的 HTML 默认也带 `Vary: Accept` 保持一致。
 
 - **Markdown 变体场景**：请求头 `Accept` 包含 `text/markdown`（例如 `curl -H "Accept: text/markdown"`），其余请求返回 HTML 不变。
 - **响应头**：`content-type: text/markdown; charset=utf-8`、`cache-control: no-store`、`vary: Accept`、`x-markdown-tokens`（CJK 感知的 `estimateTokens()` 估算）和 `x-cache: hit|miss`（html/wechat 的
   `markdownResponse()` 组装，`lib/to-markdown.js:142-153`；tweet 路由同样头，`routes/tweet.js:669-674`）。
 
-## 2 三条路由的 Markdown 来源
+## 2 四条路由的 Markdown 来源
 
 ### 2.1 推文：直接从 fxtwitter 数据渲染
 
@@ -39,17 +41,21 @@ x-page 支持在三条路由上按 `Accept: text/markdown` 内容协商返回 Ma
 把结构化数据直接渲染成 Markdown，不经 HTML 中转。推文 Markdown 本身没有独立的 R2 缓存——底层 thread JSON 已按 `tweet/<id>.<lang>.json` 缓存，Markdown 每次即时渲染。缓存键带语言维度：`?lang=ja` 与
 `?lang=zh-cn` 各存一份（`routes/tweet.js:708-711`）。
 
-### 2.2 /html/ 与 /wechat/：Workers AI toMarkdown 转换
+### 2.2 /html/、/r2-html/ 与 /wechat/：Workers AI toMarkdown 转换
 
-`serveHtml()` 的 `serveMarkdown()`（`routes/html.js:268-336`）：
+`serveHtml()` 的 `serveMarkdown()`（`routes/html.js:282-353`）：
 
-1. **R2 查缓存** `md/<route-prefix>/<target>`（`/html/` 与 `/wechat/` 的结果不同键、互不覆盖）。`?refresh=` 强制跳缓存、覆盖写回。
+1. **R2 查缓存** `md/<mdNs>/<target>`（`routes/html.js:287`）。`mdNs` 由调用方通过 `serveHtml` 的显式参数传入（默认 `"html"`，`/wechat/` 传 `"wechat"`），不从路由前缀推导。`?refresh=` 强制跳缓存、覆盖写回。
 2. **抓上游**（沿用 `fetchUpstream()` 的 iOS 微信 UA + 自家 Referer）。
-3. **HTMLRewriter 改写资源**后转给 Workers AI `toMarkdown`。
+3. **HTMLRewriter 改写资源**，命中站点 hack 时在缓冲好的完整 HTML 上应用 `applySiteHack`，再转给 Workers AI `toMarkdown`。
 4. **写回 R2** 经 `ctx.waitUntil` 后台执行。
 
-`/wechat/` 的 Markdown 变体与 HTML 缓存 key 完全独立，HTML 缓存是 `wechat/<原文URL>`、Markdown 是 `md/wechat/<原文URL>`，且 Markdown 协商在 R2
-命中判断**之前**短路（`routes/wechat.js:197-199`），否则缓存 HTML 会被无视 Accept 回给 Markdown 客户端。
+`/r2-html/` 的 Markdown 变体走的就是这条 `serveMarkdown` 管线——`serveR2Html` 检测到 `Accept: text/markdown` 会**先短路**给 `serveHtml(前缀 "/r2-html/")`，它与 `/html/` 共用 `md/html/<target>` 缓存。
+两条路由的 Markdown 产物相同（都无 `transform`、同一抓取与改写参数、同一 origin 注入 `<base>`），所以同一个 URL 不管经哪条路由第一次转换，另一条都直接命中（`routes/html.js:491-494`）。
+这与 `/r2-html/` 的 HTML 视图缓存（`html/<target>`）是两套互不干扰的 key：Markdown 请求读的是自己的 `md/` 命名空间，**不依赖 HTML 视图是否缓存 R2**，所以即便 HTML 视图走的是不缓存的 `/html/`，Markdown 变体照样能命中 `md/html/<target>` 缓存。
+
+`/wechat/` 的 Markdown 变体同理，与 HTML 缓存 key 完全独立，HTML 缓存是 `wechat/<原文URL>`、Markdown 是 `md/wechat/<原文URL>`，且 Markdown 协商在 R2
+命中判断**之前**短路（`routes/wechat.js:196-198`），否则缓存 HTML 会被无视 Accept 回给 Markdown 客户端。
 
 ## 3 Workers AI toMarkdown 的零成本真相
 
@@ -76,7 +82,7 @@ HTML，实现在 `/wechat/` 页脚截断上——这也是 `serveHtml` 的 `tran
 
 ### 4.1 R2 永久缓存
 
-转换结果落 R2 `md/<route>/<target>`，**没有过期规则，永久保留**。转换本身 130–330ms、约 8% 请求有 48–100 秒长尾，不缓存重复请求的代价太高——每个 URL 一生只转一次让重复延迟从秒级压到毫秒级。`?refresh=`
+转换结果落 R2 `md/<mdNs>/<target>`，**没有过期规则，永久保留**。转换本身 130–330ms、约 8% 请求有 48–100 秒长尾，不缓存重复请求的代价太高——每个 URL 一生只转一次让重复延迟从秒级压到毫秒级。`?refresh=`
 是 R2 永不过期的唯一逃生口，语义是跳读、强制重转、覆盖写回。
 
 `no-store` 的理由很明确（`lib/to-markdown.js:120-153`）：R2 是唯一真相源，边缘那份 `cache-control: max-age` 副本在本账号上 purge 不掉——zone 级 purge（files / hosts / purge_everything）实测全部 success

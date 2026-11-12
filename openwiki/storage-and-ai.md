@@ -5,13 +5,15 @@ description: 梳理持久化层 R2 缓存策略与 Workers AI 绑定，以及环
 tags: [R2, 存储, Workers AI, 配置]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T10:39:10.208Z
+    at: 2026-11-12T05:54:32.565Z
 sources:
   - id: openwiki-source-529e9dc3a2b5d10c27b03b93
     resource: repo://lib/to-markdown.js
+  - id: openwiki-source-191ac1117a045536f59c18b2
+    resource: repo://routes/html.js
   - id: openwiki-source-8f4419482b64e334cd5f4bb6
     resource: repo://wrangler.toml
-generated: { by: "claude-code", at: "2026-11-06T03:00:20.989Z" }
+generated: { by: "claude-code", at: "2026-11-12T05:54:32.565Z" }
 ---
 
 # 存储与 AI 绑定
@@ -20,27 +22,31 @@ x-page 的几乎所有持久化都过 R2 桶 `x-page`（绑定 `TWEETS`）。AI 
 
 ## 1 绑定总表
 
-`wrangler.toml` 的绑定与变量（`wrangler.toml:20-75`）：
+`wrangler.toml` 的绑定与变量（`wrangler.toml:19-58`）：
 
 | Name     | 类型                                      | 说明 |
 | -------- | ----------------------------------------- | ---- |
-| `TWEETS` | R2 bucket `x-page`（dev 是 `x-page-dev`） | 推文 JSON、`wechat/` HTML、`md/` Markdown 三个前缀共用同一桶 |
-| `AI`     | Workers AI                                | `/html/` 与 `/wechat/` 的 `Accept: text/markdown` 转换用 |
+| `TWEETS` | R2 bucket `x-page`（dev 是 `x-page-dev`） | 推文 JSON、`wechat/` HTML、`html/` HTML、`md/` Markdown 四个前缀共用同一桶 |
+| `AI`     | Workers AI                                | `/html/`、`/r2-html/` 与 `/wechat/` 的 `Accept: text/markdown` 转换用 |
 
 ## 2 R2 键前缀与 lifecycle
 
-| 前缀                     | 存什么                                             | 生命周期 |
-| ------------------------ | -------------------------------------------------- | -------- |
-| `tweet/<id>.json`        | 未翻译的 fxtwitter thread JSON                     | 365 天过期（`expire-tweets-after-1y` lifecycle） |
-| `tweet/<id>.<lang>.json` | 带翻译的 thread JSON（`?lang=` 或 `TWITTER_LANG`） | 同上，按语言一份 |
-| `wechat/<原文URL>`       | 渲染好的完整 HTML                                  | **永久保留**（防失效优先，无过期规则） |
-| `md/<route>/<target>`    | `/html/` 与 `/wechat/` 的 Markdown 变体            | **永久保留**，同一 URL 一生只转一次 |
+| 前缀                     | 存什么                                                                                                   | 生命周期 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------- | -------- |
+| `tweet/<id>.json`        | 未翻译的 fxtwitter thread JSON                                                                           | 365 天过期（`expire-tweets-after-1y` lifecycle） |
+| `tweet/<id>.<lang>.json` | 带翻译的 thread JSON（`?lang=` 或 `TWITTER_LANG`）                                                       | 同上，按语言一份 |
+| `wechat/<原文URL>`       | 渲染好的完整 HTML                                                                                        | **永久保留**（防失效优先，无过期规则） |
+| `html/<原文URL>`         | `/r2-html/` 路由的 HTML 视图                                                                             | **永久保留**（沿用 `wechat/` 语义，无过期、无 refresh 入口） |
+| `md/<mdNs>/<target>`     | `/html/` 与 `/r2-html/` 的 Markdown 变体（共用 `md/html/`），`/wechat/` 的 Markdown 变体（`md/wechat/`） | **永久保留**，同一 URL 一生只转一次 |
 
-`tweet/` 前缀 365 天后自动过期；`wechat/` 与 `md/` 无过期规则，永久保留。推文 R2 命中规则是「有对象就用、无应用层过期判断」，唯一回源触发是用户主动 `?refresh=1`。
+`tweet/` 前缀 365 天后自动过期；`wechat/`、`html/` 与 `md/` 无过期规则，永久保留。推文 R2 命中规则是「有对象就用、无应用层过期判断」，唯一回源触发是用户主动 `?refresh=1`。
+
+HTML 视图的缓存范围要分清：**只有 `/r2-html/`（`html/`）与 `/wechat/`（`wechat/`）的 HTML 视图落 R2**，`/html/` 的 HTML 视图**不**缓存。
+Markdown 变体则三条路由都缓存（`/html/` 与 `/r2-html/` 共用 `md/html/`，`/wechat/` 用 `md/wechat/`），且 Markdown 请求读的是自己的 `md/` 命名空间，不依赖 HTML 视图是否缓存 R2。
 
 ## 3 Workers AI 绑定：toMarkdown 零消耗
 
-`/html/` 与 `/wechat/` 的 Markdown 变体走 `env.AI.toMarkdown()`（`lib/to-markdown.js`）。它的 HTML 转换是纯确定性解析（剥离 script/style、抽 meta、解析相对链接），**不调用任何模型**，消耗 0
+`/html/`、`/r2-html/` 与 `/wechat/` 的 Markdown 变体走 `env.AI.toMarkdown()`（`lib/to-markdown.js`）。它的 HTML 转换是纯确定性解析（剥离 script/style、抽 meta、解析相对链接），**不调用任何模型**，消耗 0
 Neuron，完全不碰免费套餐 10,000 Neurons/天 池子（2026-10 在本账号验证；见 [Markdown 转换](markdown.md)）。
 
 AI 绑定的使用仅限一条路径；Markdown 转换结果必须先落 R2、命中才返回，因为转换本身 130–330ms、约 8% 请求有 48–100 秒长尾（`lib/to-markdown.js:25-27`），不缓存代价太高。

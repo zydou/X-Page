@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:9b941de51d3c2b673c8f873c871ee6b99aad522cab449808d45e2030af1e9635",
+  "pageVersion": "sha256:71b3ae587ecac3604fa8c2bff3c650ba6818c653cb402e1cb7a752da43922b4d",
   "claims": [
     {
       "id": "claim_d80fdd7959ea4571a966a79ad0050944",
-      "statement": "x-page 由 worker.js 单入口按优先级分发各子服务（根 302、favicon、webhook、vid、img、html、wechat、proxy、assets、github），推文路由为兜底。",
+      "statement": "x-page 由 worker.js 单入口按优先级分发各子服务（根 302、favicon、webhook、vid、img、html、r2-html、wechat、proxy、assets、github），推文路由为兜底。",
       "evidence": [
         {
-          "resource": "repo://worker.js#L79-L145",
-          "version": "repo-lines-v1:sha256:cedf15c68c99fbf600e0b6127ff13523a5870ef453c5a7e95d4f3fa2bf894a4a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4YmQ2M2IxMzI4YmFjNmJjMmU0Zjg1OTNkODVmODYxZjFkMDg3Njc4YWI2OThiNmM1NmE2ZDI0N2RkN2EzNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNWNkMmZiNGYzZGY4ODQ1MTUyNTViMzk1MjNmMmY4YjU0NzJiZWVhOWY1NjZmZmNhMjA0ZGI4MDI1NjEwNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4ZDliMmU2YTUwN2YzZjU5NGNhOTlhYjQzNzhjNmJkY2VjNjA2YjVhZGVkZjc2M2FmZWFmMzc2YTkyZGMzMzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAifQ"
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:dbb2576e0f91a2b6f8c487d44d9c0f2ff9873b34b2ab5739985d127f93120de2"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
@@ -34,11 +34,11 @@
     },
     {
       "id": "claim_de06dee5795148b887593954f7315d64",
-      "statement": "TWEETS 绑定指向 R2 桶 x-page，承载 tweet、wechat、md 三个键前缀，tweet 前缀 365 天过期。",
+      "statement": "TWEETS 绑定指向 R2 桶 x-page，承载 tweet、wechat、html、md 四个键前缀，tweet 前缀 365 天过期。",
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
@@ -48,7 +48,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
@@ -65,6 +65,6 @@
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T05:42:52.452Z"
+    "at": "2026-11-12T05:54:32.565Z"
   }
 }

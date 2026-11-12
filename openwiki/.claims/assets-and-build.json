@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:a1a465941169e29781702ffe461d1d4aa5a3a323a73fefde345bfbca3c41baa6",
+  "pageVersion": "sha256:d0650e4207df02f1d8534d02d363c9f915b9f824ee5297fb33114f5d698e3283",
   "claims": [
     {
       "id": "claim_f51f162b24414602989954d65bc97063",
       "statement": "worker.js 通过 Text module 导入 ARTPLAYER_JS、TWITTER_CSS、GITHUB_CSS 三份浏览器资产，并在 /assets/ 分支按文件名外置 serve，下游模块用外链引用而不内联。",
       "evidence": [
         {
-          "resource": "repo://worker.js#L121-L136",
+          "resource": "repo://worker.js#L127-L142",
           "version": "repo-lines-v1:sha256:ec065cd9a367cef6befea770bb93ddfeb06eeaaff2547afdffef38ab36fff58f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNTk2YTAzOTAxZDNlNzM3MjIwMTA5NjY0NzFmY2IwNTNmMjAyMzRiNjZmYjUxNDdhOGE4ZmZlOTUyYzlhMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiN2Q0NDc1ZjJmYjRjMmY1ODA5OTk1MDEzMzk5NzA2NGY4M2Q1NjU3ZTkwM2M1ODYwMzY0NjNmODI0Nzc0MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ODVkNTA3MDA1ODE3ODEyODIyYmMxZDVkZTY1NTFlYzIyZjc5NmFkNWFhZjNkNmY3NWU2MDM5ZjQ4MTBhY2YifQ"
         },
         {
-          "resource": "repo://worker.js#L36-L38",
+          "resource": "repo://worker.js#L37-L39",
           "version": "repo-lines-v1:sha256:b1c6d3a75ce13037b18fccc96980f122223b87208e000dc4cd78f151242a6869:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQwNTAyYzg1OTk5YzMwOGQ3YjkwNTNiMmEyOTcwMzhiMzczNGMwMDY2N2NmNTI5ZTk0OTIwMWVmMDhjOTUwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZWY5ODU3NzM0OGUwMTIxN2M2MzU3MTE5OGY0OGZlYWMyZTQ1NjY5Y2NmNzQwMzIyYWYwYzBkMDk4OGZmMmE1ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjZkYzYzMGVlNWIzOTZmY2VhY2ExMzY4ZTk5YmZkOThkYWFiYjg5NDVjM2JlYjhjYjEzZjQxMDcyOTBiM2YyYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzkyY2U1MjdiNzhlYzI2Y2Y1YmU0MzBjNGNkYjA4OGIwMzVhNDAxYWVjYjIyYWY4ZTkxNzYyNTg0NjRjMDM4MyJ9"
         }
       ]
@@ -22,7 +22,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
@@ -72,7 +72,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
@@ -105,7 +105,7 @@
       "statement": "/assets/ 分支以 Cache-Control: public, max-age=31556952, immutable 外置 serve twitter.css / github.css / artplayer.js，让飞书多 iframe 共享一份浏览器缓存；未命中资产名返回 404。",
       "evidence": [
         {
-          "resource": "repo://worker.js#L121-L136",
+          "resource": "repo://worker.js#L127-L142",
           "version": "repo-lines-v1:sha256:ec065cd9a367cef6befea770bb93ddfeb06eeaaff2547afdffef38ab36fff58f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNTk2YTAzOTAxZDNlNzM3MjIwMTA5NjY0NzFmY2IwNTNmMjAyMzRiNjZmYjUxNDdhOGE4ZmZlOTUyYzlhMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiN2Q0NDc1ZjJmYjRjMmY1ODA5OTk1MDEzMzk5NzA2NGY4M2Q1NjU3ZTkwM2M1ODYwMzY0NjNmODI0Nzc0MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ODVkNTA3MDA1ODE3ODEyODIyYmMxZDVkZTY1NTFlYzIyZjc5NmFkNWFhZjNkNmY3NWU2MDM5ZjQ4MTBhY2YifQ"
         }
       ]
@@ -115,11 +115,11 @@
       "statement": "浏览器资产（twitter.css / github.css / artplayer.mjs）外置到 /assets/ 长缓存，Worker 端 SSR 资产（markdown-it.mjs / highlight.mjs）不下发浏览器——两类资产职责分明。",
       "evidence": [
         {
-          "resource": "repo://worker.js#L121-L136",
+          "resource": "repo://worker.js#L127-L142",
           "version": "repo-lines-v1:sha256:ec065cd9a367cef6befea770bb93ddfeb06eeaaff2547afdffef38ab36fff58f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNTk2YTAzOTAxZDNlNzM3MjIwMTA5NjY0NzFmY2IwNTNmMjAyMzRiNjZmYjUxNDdhOGE4ZmZlOTUyYzlhMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiN2Q0NDc1ZjJmYjRjMmY1ODA5OTk1MDEzMzk5NzA2NGY4M2Q1NjU3ZTkwM2M1ODYwMzY0NjNmODI0Nzc0MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ODVkNTA3MDA1ODE3ODEyODIyYmMxZDVkZTY1NTFlYzIyZjc5NmFkNWFhZjNkNmY3NWU2MDM5ZjQ4MTBhY2YifQ"
         },
         {
-          "resource": "repo://worker.js#L36-L44",
+          "resource": "repo://worker.js#L37-L45",
           "version": "repo-lines-v1:sha256:f95adecd98cfda01998a5a71f5d841e4cdad30406a1d0169b921c395a95b862a:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQwNTAyYzg1OTk5YzMwOGQ3YjkwNTNiMmEyOTcwMzhiMzczNGMwMDY2N2NmNTI5ZTk0OTIwMWVmMDhjOTUwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGUxNmNmZmZlYzE2ZWJiNzAyOWViMjcwZmUwOWZjMDgxMTIxZWVjZWE4MzRkMjIxMjM3MjIzNGVlZDNmMDQ0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjZkYzYzMGVlNWIzOTZmY2VhY2ExMzY4ZTk5YmZkOThkYWFiYjg5NDVjM2JlYjhjYjEzZjQxMDcyOTBiM2YyYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODNmNTVlZjE3NzQzNDMwMTkzMzM5YWFhNzU2MTZjYTFjZTI4NWRkNmM4ODNjZTIxMjYxY2Y5ODNjZDMxNjhmNSJ9"
         }
       ]
@@ -167,6 +167,6 @@
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T10:39:10.208Z"
+    "at": "2026-11-12T05:54:32.565Z"
   }
 }

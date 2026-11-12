@@ -5,7 +5,7 @@ description: 介绍 Telegram 转换机器人的 webhook 安全模型与链接转
 tags: [Telegram, Bot, webhook, 链接转换]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T10:39:10.208Z
+    at: 2026-11-12T05:35:22.493Z
 sources:
   - id: openwiki-source-3dec53bd176af78782129d6d
     resource: repo://lib/bot/matcher.js
@@ -15,7 +15,7 @@ sources:
     resource: repo://lib/bot/telegram.js
   - id: openwiki-source-7ac255018a231eb231733c3f
     resource: repo://routes/webhook.js
-generated: { by: "claude-code", at: "2026-11-10T10:39:10.208Z" }
+generated: { by: "claude-code", at: "2026-11-12T05:35:22.493Z" }
 ---
 
 # Telegram 机器人
@@ -73,7 +73,7 @@ generated: { by: "claude-code", at: "2026-11-10T10:39:10.208Z" }
 - **通用 URL**：按扩展名 `checkTextType()` 判定 image / video / other：
   - image：回 `/img/` 代理 + `/img/d/` 直链两条（`lib/bot/matcher.js:156-157`）。
   - video：回 `/vid/` + `/vid/d/` 两条（`lib/bot/matcher.js:159-160`）。
-  - other：回 `/vid/`、`/vid/d/`、`/img/`、`/img/d/`、`/html/` 五条全套（`lib/bot/matcher.js:162-168`），让用户自己挑。
+  - other：回 `/vid/`、`/vid/d/`、`/img/`、`/img/d/`、`/html/`、`/r2-html/` 六条全套（`lib/bot/matcher.js:162-169`），让用户自己挑。其中 `🌐网页` 走 `/html/`（实时抓取），`🌐网页(R2)` 走 `/r2-html/`（HTML 视图缓存在 R2，原文失效后仍可读）——两者仅此差异，详见 [HTML 与微信文章代理](html-wechat.md)。
 
 ## 5 媒体消息：下载与图床上传
 

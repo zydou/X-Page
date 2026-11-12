@@ -1,24 +1,24 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:f2f17bbafbf8ff42be186f373d70a2a8e76f7e2b7c5ca6328b1e6163963ad50c",
+  "pageVersion": "sha256:4eb60e30a6e01ae512f2fb518f58bbd2aca3f199ee20c0b88619b08916163c24",
   "claims": [
     {
       "id": "claim_850e2e6810db4a52940f2304cd8eb254",
-      "statement": "R2 绑定 TWEETS 指向桶 x-page，承载 tweet、wechat、md 三种键前缀，tweet 前缀 365 天 lifecycle 过期。",
+      "statement": "R2 绑定 TWEETS 指向桶 x-page，承载 tweet、wechat、html、md 四类键前缀，tweet 前缀 365 天 lifecycle 过期。",
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
     {
       "id": "claim_45a3ede6d516449099b3b8248294a8cd",
-      "statement": "wechat 与 md 前缀无过期规则永久保留，防原文删除或重复转换。",
+      "statement": "wechat、html 与 md 前缀无过期规则永久保留，防止原文删除或重复转换。",
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
@@ -38,7 +38,7 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     },
@@ -48,13 +48,27 @@
       "evidence": [
         {
           "resource": "repo://wrangler.toml",
-          "version": "repo-file-v1:sha256:a46aa952e6a4b93ee163ad37a6712f6ef25f6dad6ede804f4f67481f3106a176"
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
+        }
+      ]
+    },
+    {
+      "id": "claim_f8504d63e349468e82e28eed5291b9ee",
+      "statement": "R2 的 html/ 前缀存放 /r2-html/ 路由的 HTML 视图缓存，key = html/<原文URL>，永久保留、无过期、无 refresh 入口（沿用 wechat/ 语义）。HTML 视图只有 /r2-html/（html/）与 /wechat/（wechat/）落 R2，/html/ 的 HTML 视图不缓存；Markdown 变体三条路由都缓存，md/ 前缀下为 md/html/（/html/ 与 /r2-html/ 共用）与 md/wechat/。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
+        },
+        {
+          "resource": "repo://wrangler.toml",
+          "version": "repo-file-v1:sha256:0ce4c21735f9647b1a5b54ffc5778748bb6e12e2be7b640a922afe9efe09255f"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T10:39:10.208Z"
+    "at": "2026-11-12T05:54:32.565Z"
   }
 }

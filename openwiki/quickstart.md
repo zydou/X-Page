@@ -5,7 +5,7 @@ description: 为新读者提供 x-page 的概览、服务目录与本地开发�
 tags: [快速上手, 概览, 开发, 部署]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T05:42:52.452Z
+    at: 2026-11-12T05:54:32.565Z
 sources:
   - id: openwiki-source-8a2e26d4137b8250f68bb869
     resource: repo://build.sh
@@ -15,7 +15,7 @@ sources:
     resource: repo://worker.js
   - id: openwiki-source-8f4419482b64e334cd5f4bb6
     resource: repo://wrangler.toml
-generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
+generated: { by: "claude-code", at: "2026-11-12T05:54:32.565Z" }
 ---
 
 # 快速上手
@@ -37,6 +37,7 @@ generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
 | `GET /vid/<url>` 与 `/vid/d/<url>`          | 视频播放器 HTML（代理 / 直连）                                                   | [媒体代理与 GitHub 渲染](media-github.md) |
 | `GET /img/<url>` 与 `/img/d/<url>`          | 自适应图片预览 HTML                                                              | 同上 |
 | `GET /html/<url>`                           | HTML 抓取 + 改写代理                                                             | [HTML 与微信文章代理](html-wechat.md) |
+| `GET /r2-html/<url>`                        | 同 `/html/`，HTML 视图额外缓存 R2（`html/`，原文失效后仍可读）                   | 同上、[存储与 AI 绑定](storage-and-ai.md) |
 | `GET /wechat/<url>`                         | 微信公众号文章代理（标题回跳原文）                                               | 同上 |
 | `GET /proxy/<url>`                          | 通用媒体代理                                                                     | 同上 |
 | `GET /assets/<name>`                        | 外置静态 CSS/JS（immutable 长缓存）                                              | [外置资产与构建部署](assets-and-build.md) |
@@ -96,8 +97,8 @@ push 到 `worker.js`、`routes/**`、`lib/**`、`assets/**`、`wrangler.toml`、
 
 | 项                                            | 用途 |
 | --------------------------------------------- | ---- |
-| R2 `TWEETS`（桶 `x-page` / dev `x-page-dev`） | `tweet/`、`wechat/`、`md/` 三个前缀共用；`tweet/` 365 天 lifecycle 过期 |
-| Workers AI `env.AI`                           | `/html/` 与 `/wechat/` 的 Markdown 转换，0 Neuron |
+| R2 `TWEETS`（桶 `x-page` / dev `x-page-dev`） | `tweet/`、`wechat/`、`html/`、`md/` 前缀共用（`md/` 下为 `md/html/` 与 `md/wechat/`）；`tweet/` 365 天 lifecycle 过期 |
+| Workers AI `env.AI`                           | `/html/`、`/r2-html/` 与 `/wechat/` 的 Markdown 转换，0 Neuron |
 | `TIMEZONE = "Asia/Shanghai"`                  | 推文时间戳显示时区 |
 | `TWITTER_LANG = "cn"`                         | 推文默认翻译语言；`?lang=` 覆盖 |
 | `TWITTER_PREWARM_LANGS = "cn,ja"`             | Telegram bot 推文预热语言列表（逗号分隔），每条链接各写一份 `tweet/<id>.<lang>.json`；为空回退 `TWITTER_LANG` |

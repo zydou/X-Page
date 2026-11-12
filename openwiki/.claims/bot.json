@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:c162d13a79c874bdcb480223594e58096479283442094e92cfe2600d80ffb4e4",
+  "pageVersion": "sha256:6b3db6dcf50ad62ae65863ca5796e689cb1a99e7cb6d73150cb3ed5ea1d53f7b",
   "claims": [
     {
       "id": "claim_219822b25a2e4d0a9961148356ee3ddf",
@@ -28,7 +28,7 @@
       "evidence": [
         {
           "resource": "repo://lib/bot/matcher.js",
-          "version": "repo-file-v1:sha256:e6371770b69843e7547380e2101571fbeaf6a361e3436215d7941593cde16147"
+          "version": "repo-file-v1:sha256:618bc3fa586fd14bc79b0ec085c44a652d3c11a53fe45da55527c2e7b1d629d1"
         }
       ]
     },
@@ -38,7 +38,7 @@
       "evidence": [
         {
           "resource": "repo://lib/bot/matcher.js",
-          "version": "repo-file-v1:sha256:e6371770b69843e7547380e2101571fbeaf6a361e3436215d7941593cde16147"
+          "version": "repo-file-v1:sha256:618bc3fa586fd14bc79b0ec085c44a652d3c11a53fe45da55527c2e7b1d629d1"
         }
       ]
     },
@@ -98,13 +98,23 @@
       "evidence": [
         {
           "resource": "repo://lib/bot/matcher.js",
-          "version": "repo-file-v1:sha256:e6371770b69843e7547380e2101571fbeaf6a361e3436215d7941593cde16147"
+          "version": "repo-file-v1:sha256:618bc3fa586fd14bc79b0ec085c44a652d3c11a53fe45da55527c2e7b1d629d1"
+        }
+      ]
+    },
+    {
+      "id": "claim_ea529c5cbe79463eba5b1e064111ecd4",
+      "statement": "buildReply 的通用 URL 兜底分支在原有 /html/ 之外新增 /r2-html/ 变体（文本「🌐网页(R2)」），二者仅差异在于 HTML 视图是否缓存 R2：/r2-html/ 原文失效后仍可读。图片/视频分支与 X/GitHub/微信专属路由不受影响。",
+      "evidence": [
+        {
+          "resource": "repo://lib/bot/matcher.js",
+          "version": "repo-file-v1:sha256:618bc3fa586fd14bc79b0ec085c44a652d3c11a53fe45da55527c2e7b1d629d1"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T10:39:10.208Z"
+    "at": "2026-11-12T05:35:22.493Z"
   }
 }

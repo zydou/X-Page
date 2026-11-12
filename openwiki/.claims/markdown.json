@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:2ce245c52cf9ae74e80955d1e0d8632469bfc926b2bbe778f8a347aabecef642",
+  "pageVersion": "sha256:d13fe14d4237d32b7e94677839cf82555e35c64cb6f0f8340696d553104d6478",
   "claims": [
     {
       "id": "claim_a1c92053a85846869dc5e91a6985defb",
@@ -38,7 +38,7 @@
       "evidence": [
         {
           "resource": "repo://routes/html.js",
-          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
         }
       ]
     },
@@ -85,10 +85,34 @@
           "version": "repo-lines-v1:sha256:2866dba08730a559e324348089777c586efac991bab466bcc8adc931349ef4c9:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg2NmRiYTA4NzMwYTU1OWUzMjQzNDgwODk3NzdjNTg2ZWZhYzk5MWJhYjQ2NmJjYzhhZGM5MzEzNDllZjRjOSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjg2NmRiYTA4NzMwYTU1OWUzMjQzNDgwODk3NzdjNTg2ZWZhYzk5MWJhYjQ2NmJjYzhhZGM5MzEzNDllZjRjOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmFjN2U0NjlmMTNlMjNmZDRjNzc5YTY0NWQxNjg3MDc5ZGE4ZDE3MjUzMmYwNGE2OGUzMGMzZWZjZDUwZmQ4NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiY2ZkMGVkODQzNDUwNjU0MWQ4NzBlMTNjYzY3MjcxOTU1NDU4OWFkZmNkMWI0NDY0OGMzY2MyYmNmNzU4MDM4NiJ9"
         }
       ]
+    },
+    {
+      "id": "claim_3ecf68929bd043b59fc9998889e0384a",
+      "statement": "/r2-html/ 也支持 Accept: text/markdown，serveR2Html 检测到 Markdown 协商先短路给 serveHtml 的 serveMarkdown 管线，与 /html/ 共用 md/html/<target> 缓存（产物相同）。Markdown 请求读的是自己的 md/ 命名空间，不依赖 HTML 视图是否缓存 R2。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
+        }
+      ]
+    },
+    {
+      "id": "claim_f8808e5a18cd469bafbb6432f3cd5e7f",
+      "statement": "/html/ 与 /r2-html/ 的 Markdown 产物相同（都无 transform、同一抵取与改写参数），因此共用 md/html/<target> 缓存；/wechat/ 经 transform 裁剪页脚与推广卡片，产物不同，使用 md/wechat/。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
+        },
+        {
+          "resource": "repo://routes/wechat.js",
+          "version": "repo-file-v1:sha256:e18dd1bcbc6075bc7ea61a1209120d754932b53b3c71beba991542e0de45325b"
+        }
+      ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T10:39:10.208Z"
+    "at": "2026-11-12T05:54:32.565Z"
   }
 }

@@ -5,13 +5,13 @@ description: 阐明推文渲染的数据源、翻译与缓存策略，以及自�
 tags: [推文, Twitter, fxtwitter, 翻译, R2缓存]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T10:39:10.208Z
+    at: 2026-11-12T05:35:22.493Z
 sources:
   - id: openwiki-source-51d8dc0d173d42237cb85fda
     resource: repo://lib/thread.js
   - id: openwiki-source-7e7c48b6dbe712bdc9057f3a
     resource: repo://routes/tweet.js
-generated: { by: "claude-code", at: "2026-11-10T05:42:52.452Z" }
+generated: { by: "claude-code", at: "2026-11-12T05:35:22.493Z" }
 ---
 
 # 推文服务
@@ -93,7 +93,21 @@ thread 中没有父节点的活推文，取最早的一条（按 `created_timest
 
 页面上的「强制刷新」按钮通过 `?refresh_button=0` 隐藏（`routes/tweet.js:627`）；生成刷新 URL 时保留 `mode` 与 `lang`，避免点刷新后跳回默认（`routes/tweet.js:629-631`）。
 
-## 3 关联
+## 3 纯引用壳折叠：`isQuoteOnlyShell(post)`
+
+串推作者常用「引用旧推」续链、自己不写正文——这条壳推若照常渲染，就会多出一条**只有裸链接的空条目**（如 arena 的 weekly thread）。`isQuoteOnlyShell()`（`routes/tweet.js:313-321`）识别这种壳：
+
+- 判定为真的条件：推有 `quote`，且正文剔除引用 URL 后**已无任何实质内容**。取文优先 `html_no_media || translation.text || text`，先经 `stripArticleLink()` 去掉 article 链接再 trim，然后 `body.split(quoteUrl).join("").trim() === ""`。
+- **带保护**：无 `quote`、引用 `url` 缺失、或正文剔除引用 URL 后还有别的话 → 返回 `false`，按普通推渲染（宁可不折叠，绝不误删有真实评论的推）。连链接都没有的真空推也不在此处理。
+
+命中时，HTML 与 Markdown 两条渲染路径都**跳过壳本身的头部与裸链接、直接渲染被引用推**：
+
+- `renderPost()`（HTML，`routes/tweet.js:348-350`）：`return renderPost(post.quote, { ..., articlePreview: true })`，只剥一层、不再递归展开「引用的引用」。
+- `renderPostMarkdown()`（Markdown，`routes/tweet.js:472-474`）：同样转去渲染 `post.quote`，带 `isQuote: true`。
+
+净效果是串推里不再夹空条目，被引用推以「标题+摘要」预览形态（`articlePreview: true`）呈现。
+
+## 4 关联
 
 - Markdown 变体的整体规则与 R2 key → [Markdown 转换](markdown.md)
 - R2 生命周期 → [存储与 AI 绑定](storage-and-ai.md)

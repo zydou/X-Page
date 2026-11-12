@@ -1,24 +1,14 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:514ba86c68b8442e41ced952d90bedd9d4a82baf369bc63197f3a331127a8364",
+  "pageVersion": "sha256:24574115af26fa6fcc5ba62b1c60365c99e129aaec340a7bbfbb33dab41b7bc7",
   "claims": [
-    {
-      "id": "claim_43cdeab24c3b497d9a1274ff7f71ff04",
-      "statement": "worker.js 按根、favicon、webhook、vid、img、html、wechat、proxy、assets/、github、推文兜底的顺序分发请求，/assets/ 静态资产分支位于 proxy 之后、github 之前。",
-      "evidence": [
-        {
-          "resource": "repo://worker.js#L79-L145",
-          "version": "repo-lines-v1:sha256:cedf15c68c99fbf600e0b6127ff13523a5870ef453c5a7e95d4f3fa2bf894a4a:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4YmQ2M2IxMzI4YmFjNmJjMmU0Zjg1OTNkODVmODYxZjFkMDg3Njc4YWI2OThiNmM1NmE2ZDI0N2RkN2EzNmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNWNkMmZiNGYzZGY4ODQ1MTUyNTViMzk1MjNmMmY4YjU0NzJiZWVhOWY1NjZmZmNhMjA0ZGI4MDI1NjEwNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4ZDliMmU2YTUwN2YzZjU5NGNhOTlhYjQzNzhjNmJkY2VjNjA2YjVhZGVkZjc2M2FmZWFmMzc2YTkyZGMzMzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhMWQxYTYzMzkwMjI5Yzc5ODM0N2U4M2EwNDA1NDQxYzk0MDAwMzUyODRhZDE2OGMxYmY2Y2RmMWQ3MGEzNzAifQ"
-        }
-      ]
-    },
     {
       "id": "claim_ebd4ddf78a4d47cfbecf8f3cd4fe92cd",
       "statement": "推文路由是最宽泛的形态，必须作为兜底最后匹配，固定前缀子路由都插在其之前。",
       "evidence": [
         {
           "resource": "repo://worker.js",
-          "version": "repo-file-v1:sha256:6deca63451884ba378195b92f916643a4ac80df0e2a45859bbf60dd4b47fac58"
+          "version": "repo-file-v1:sha256:dbb2576e0f91a2b6f8c487d44d9c0f2ff9873b34b2ab5739985d127f93120de2"
         }
       ]
     },
@@ -27,11 +17,11 @@
       "statement": "worker.js 通过 Text module 导入三份浏览器资产（artplayer.mjs/twitter.css/github.css）在 /assets/ 分支外置 serve，下游用外链引用；highlight.mjs 作为参数传给 serveGithub 在 Worker 端 SSR、不下发浏览器。",
       "evidence": [
         {
-          "resource": "repo://worker.js#L121-L136",
+          "resource": "repo://worker.js#L127-L142",
           "version": "repo-lines-v1:sha256:ec065cd9a367cef6befea770bb93ddfeb06eeaaff2547afdffef38ab36fff58f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxNTk2YTAzOTAxZDNlNzM3MjIwMTA5NjY0NzFmY2IwNTNmMjAyMzRiNjZmYjUxNDdhOGE4ZmZlOTUyYzlhMzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4OTNmNDBlMzc4MWViODk2YzgyZDA0NmEwODA2N2ExMWUzNWNkZjJmMWRmYWYyNmZlYTkwYjhkYjY2NzY0MTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiN2Q0NDc1ZjJmYjRjMmY1ODA5OTk1MDEzMzk5NzA2NGY4M2Q1NjU3ZTkwM2M1ODYwMzY0NjNmODI0Nzc0MmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI4ODVkNTA3MDA1ODE3ODEyODIyYmMxZDVkZTY1NTFlYzIyZjc5NmFkNWFhZjNkNmY3NWU2MDM5ZjQ4MTBhY2YifQ"
         },
         {
-          "resource": "repo://worker.js#L36-L44",
+          "resource": "repo://worker.js#L37-L45",
           "version": "repo-lines-v1:sha256:f95adecd98cfda01998a5a71f5d841e4cdad30406a1d0169b921c395a95b862a:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODQwNTAyYzg1OTk5YzMwOGQ3YjkwNTNiMmEyOTcwMzhiMzczNGMwMDY2N2NmNTI5ZTk0OTIwMWVmMDhjOTUwNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGUxNmNmZmZlYzE2ZWJiNzAyOWViMjcwZmUwOWZjMDgxMTIxZWVjZWE4MzRkMjIxMjM3MjIzNGVlZDNmMDQ0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjZkYzYzMGVlNWIzOTZmY2VhY2ExMzY4ZTk5YmZkOThkYWFiYjg5NDVjM2JlYjhjYjEzZjQxMDcyOTBiM2YyYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODNmNTVlZjE3NzQzNDMwMTkzMzM5YWFhNzU2MTZjYTFjZTI4NWRkNmM4ODNjZTIxMjYxY2Y5ODNjZDMxNjhmNSJ9"
         }
       ]
@@ -42,7 +32,7 @@
       "evidence": [
         {
           "resource": "repo://worker.js",
-          "version": "repo-file-v1:sha256:6deca63451884ba378195b92f916643a4ac80df0e2a45859bbf60dd4b47fac58"
+          "version": "repo-file-v1:sha256:dbb2576e0f91a2b6f8c487d44d9c0f2ff9873b34b2ab5739985d127f93120de2"
         }
       ]
     },
@@ -55,10 +45,20 @@
           "version": "repo-lines-v1:sha256:a8289c23f92b5fb9b5bfcabd770113229ce096f21e7b86c225617bc79f279fa0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyMTBkYjY4ODZlNWM4NjkzNThjMGI5MDY0ZTNmNzY3OGIwOWFhMTY2NmVmNzYxY2M4ZjM1YWFmMmFlMTM5NmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJhYzdlNDY5ZjEzZTIzZmQ0Yzc3OWE2NDVkMTY4NzA3OWRhOGQxNzI1MzJmMDRhNjhlMzBjM2VmY2Q1MGZkODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
         }
       ]
+    },
+    {
+      "id": "claim_f3698452b063489aa7c3369cd185b303",
+      "statement": "worker.js 按根、favicon、webhook、vid、img、html、r2-html、wechat、proxy、assets/、github、推文兜底的顺序分发请求；/r2-html/ 分支位于 /html/ 之后、/wechat/ 之前（worker.js:112-114），/assets/ 静态资产分支位于 proxy 之后、github 之前（worker.js:127-141）。worker.js 顶部注释列出的顺序把 /assets/ 排在 /webhook 之前，与 fetch() 实际的 if 顺序不同。",
+      "evidence": [
+        {
+          "resource": "repo://worker.js",
+          "version": "repo-file-v1:sha256:dbb2576e0f91a2b6f8c487d44d9c0f2ff9873b34b2ab5739985d127f93120de2"
+        }
+      ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T10:39:10.208Z"
+    "at": "2026-11-12T05:54:32.565Z"
   }
 }

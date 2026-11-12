@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "pageVersion": "sha256:eb2c45bcc009ffa9ef1268124e003a30278a3152fb8ee140cec31f2ffd4f8cdd",
+  "pageVersion": "sha256:82abc0544504e4c36fdbbb4b86fb18edd983a9646c4f7e10bf5555123448e884",
   "claims": [
     {
       "id": "claim_3fb58917af5a446e80f00d3e8fb556ca",
@@ -8,7 +8,7 @@
       "evidence": [
         {
           "resource": "repo://routes/html.js",
-          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
         }
       ]
     },
@@ -18,7 +18,7 @@
       "evidence": [
         {
           "resource": "repo://routes/html.js",
-          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
         }
       ]
     },
@@ -28,7 +28,7 @@
       "evidence": [
         {
           "resource": "repo://routes/html.js",
-          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
         }
       ]
     },
@@ -38,7 +38,7 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
+          "version": "repo-file-v1:sha256:e18dd1bcbc6075bc7ea61a1209120d754932b53b3c71beba991542e0de45325b"
         }
       ]
     },
@@ -48,7 +48,7 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
+          "version": "repo-file-v1:sha256:e18dd1bcbc6075bc7ea61a1209120d754932b53b3c71beba991542e0de45325b"
         }
       ]
     },
@@ -58,7 +58,7 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
+          "version": "repo-file-v1:sha256:e18dd1bcbc6075bc7ea61a1209120d754932b53b3c71beba991542e0de45325b"
         }
       ]
     },
@@ -68,7 +68,7 @@
       "evidence": [
         {
           "resource": "repo://routes/html.js",
-          "version": "repo-file-v1:sha256:dd9ca279451ef83aebefd2df3a0cbbcb1d7f1bb812dc06dfe3f7239892fe3292"
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
         }
       ]
     },
@@ -78,7 +78,7 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
+          "version": "repo-file-v1:sha256:e18dd1bcbc6075bc7ea61a1209120d754932b53b3c71beba991542e0de45325b"
         }
       ]
     },
@@ -88,13 +88,51 @@
       "evidence": [
         {
           "resource": "repo://routes/wechat.js",
-          "version": "repo-file-v1:sha256:863033cc4951d0c9ead8f941b802c253274856ac219ef3d23ffbaf28f544acc1"
+          "version": "repo-file-v1:sha256:e18dd1bcbc6075bc7ea61a1209120d754932b53b3c71beba991542e0de45325b"
+        }
+      ]
+    },
+    {
+      "id": "claim_aacc33cce98840d98ccc5378e75abff8",
+      "statement": "lib/site-hacks/ 按一站点一文件存放站点专属中和逻辑：index.js 导出 resolveSiteHack(host) 与 applySiteHack(html, hack)，每个 hack 模块导出 matches(host) 与 sanitize(html)。当前唯一实现 openrouter.js 中和 openrouter.ai 的反镜像 location.replace 跳转脚本并移除指向原站的 canonical。它在缓冲好的完整 HTML 字符串上做正则后处理（对 HTMLRewriter 的 chunk 切分免疫），并只命中未转义的可执行脚本、保留 Next.js flight payload 里的转义数据副本。",
+      "evidence": [
+        {
+          "resource": "repo://lib/site-hacks/index.js",
+          "version": "repo-file-v1:sha256:54d4b4355da581b3bf4d69373c906a3eb778c43cf777b6b1e25b837d20a0ad2f"
+        },
+        {
+          "resource": "repo://lib/site-hacks/openrouter.js",
+          "version": "repo-file-v1:sha256:40091f18f275d3a1ab22888ccefc7e9eed35435dde3cf8a2cfbf20bbe032b0a0"
+        }
+      ]
+    },
+    {
+      "id": "claim_6008ae0e8d61440da8932a5439f9b411",
+      "statement": "/r2-html/ 由 serveR2Html 实现，与 /html/ 功能一致，唯一差异是 HTML 视图多一层 R2 持久缓存（key html/<原文URL>）：命中直接返回，miss 走 serveHtml（前缀 /r2-html/）抓取改写后 ctx.waitUntil 后台写回，仅缓存 text/html；Markdown 变体短路给 serveHtml 的 serveMarkdown，与 /html/ 共用 md/html/ key。缓存语义沿用 /wechat/：R2 永久真相源、无 refresh 入口、边缘 no-store、x-cache hit/miss。/html/ 本身仍不缓存 HTML 视图。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
+        }
+      ]
+    },
+    {
+      "id": "claim_810ab7a6742a4670a4e0882a7c685c55",
+      "statement": "serveHtml / serveMarkdown 用显式参数 mdNs 决定 Markdown 的 R2 命名空间（md/<mdNs>/<target>）：serveHtml 默认 \"html\"（/html/ 与 /r2-html/ 共用），/wechat/ 三处调用显式传 \"wechat\"；不再从路由前缀推导 key。",
+      "evidence": [
+        {
+          "resource": "repo://routes/html.js",
+          "version": "repo-file-v1:sha256:b13821aa52ddab4f41c4456ec7ed1713cedbd3d4bbd4039f352aaf154ad31208"
+        },
+        {
+          "resource": "repo://routes/wechat.js",
+          "version": "repo-file-v1:sha256:e18dd1bcbc6075bc7ea61a1209120d754932b53b3c71beba991542e0de45325b"
         }
       ]
     }
   ],
   "verification": {
     "by": "openwiki/0.9.0",
-    "at": "2026-11-10T10:39:10.208Z"
+    "at": "2026-11-12T05:54:32.565Z"
   }
 }

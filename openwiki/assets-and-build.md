@@ -5,7 +5,7 @@ description: 自包含渲染的外置 /assets/ 资产策略（immutable 长缓�
 tags: [构建部署, 外置资产, CI, Cloudflare Workers]
 verified:
   - by: openwiki/0.9.0
-    at: 2026-11-10T10:39:10.208Z
+    at: 2026-11-12T05:54:32.565Z
 sources:
   - id: openwiki-source-d8b6488c252ba22fd6c0f6dc
     resource: repo://.github/workflows/deploy.yaml
