@@ -194,17 +194,18 @@ function buildRewriter(base) {
     rewriter.on(tag, handler);
   }
 
-  // 1b. <a> 标签：把 href 改写为 /html/<url>，让用户点击后仍留在代理体系内。
-  // 相对路径 → 解析为原始域名的绝对 URL → 套上 /html/ 前缀。
-  // 已有 /html/ 前缀的不用再处理；javascript: / # 锚点 不处理。
+  // 1b. <a> 标签：只把相对路径解析为原始域名的绝对 URL，不套 /html/ 代理前缀。
+  // 页面是从 worker 域名返回的，相对 href 不绝对化会指向 worker 自己；
+  // 但超链接本身不需要被代理——保持原始 URL，点击直达原站，
+  // 也让 Markdown 变体里的链接就是原文链接，无需下游清洗。
+  // javascript: / # 锚点 不处理。
   rewriter.on("a", {
     element(el) {
       const href = el.getAttribute("href");
       if (!href) return;
       const t = href.trim();
-      if (!t || /^(javascript:|#|\/html\/)/i.test(t)) return;
-      const absolute = resolveUrl(t, base);
-      el.setAttribute("href", "/html/" + absolute);
+      if (!t || /^(javascript:|#)/i.test(t)) return;
+      el.setAttribute("href", resolveUrl(t, base));
     },
   });
 

@@ -52,7 +52,7 @@ x-page/
 | `/vid/d/<raw-url>`                      | Video → player HTML (direct, no proxy) |
 | `/img/<raw-url>`                        | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
 | `/img/d/<raw-url>`                      | Image → adaptive HTML (direct) |
-| `/html/<raw-url>`                       | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs); `Accept: text/markdown` → markdown |
+| `/html/<raw-url>`                       | HTML fetch + rewrite (custom UA, proxy media, absolutize `<a>` hrefs); `Accept: text/markdown` → markdown |
 | `/r2-html/<raw-url>`                    | Same as `/html/` + R2 persistent cache for the HTML view (`html/<target>`, permanent, no refresh); `Accept: text/markdown` → markdown (cached under `md/html/<target>`, shared with `/html/`) |
 | `/wechat/<raw-url>`                     | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
 | `/proxy/<raw-url>`                      | Generic passthrough proxy; rewrites JS/CSS relative URLs |
@@ -72,7 +72,7 @@ The `/html/` route (`routes/html.js`) fetches the target page and rewrites it wi
 - **`<img>` / `<video>` / `<audio>` / `<source>` / `<embed>` / `<object>` / `<iframe>` / `<track>`** —
   rewrite `src`/`data-src`/`srcset`/`poster`/`data` to `/proxy/<encoded>` so media loads through the Worker (bypassing hotlink protection)
 - **`<script>` / `<link>`** — only proxy absolute CDN URLs; skip relative paths (their internal relative imports break when loaded from the worker domain)
-- **`<a>`** — rewrite `href` to `/html/<url>` so navigation stays within the proxy system (relative paths are resolved against the original page URL first)
+- **`<a>`** — only resolve relative `href` to an absolute original URL; no `/html/` prefix, so links go straight to the origin site (and appear as original URLs in the markdown variant)
 - **`<style>` blocks and inline `style` attributes** — rewrite `url(...)` references to proxy paths
 
 The `/proxy/` route (`routes/proxy.js`) additionally rewrites JS/CSS **content**: relative `import("./...")`, `from"./..."`, and `url(...")` references are converted to absolute proxy paths,
@@ -113,7 +113,7 @@ The tweet route renders markdown from fxtwitter data itself.
   `/html/` and `/wechat/` depend on a custom User-Agent (default iOS WeChat) plus Referer to retrieve bodies; only the Worker can do that.
   The converter receives the already-fetched HTML as a blob.
 - **Relative URLs are resolved by injecting a `<base href>` tag.**
-  After `buildRewriter()` every `<a href>` is `/html/<abs>` and every media attribute is `/proxy/<abs>`, so no page-relative links remain; pointing the base at this Worker's origin absolutises both internal path families.
+  After `buildRewriter()` every `<a href>` is an absolute original URL and every media attribute is `/proxy/<abs>`, so the only page-relative paths left are the `/proxy/` ones; pointing the base at this Worker's origin absolutises them.
   `conversionOptions.html.hostname` is deliberately *not* used — it works over REST but is silently ignored through the Workers AI binding (verified on x-dev: 78 links emitted relative).
   The converter still drops `srcset` and `data-src`-only images, which is why `buildRewriter()`'s srcset/`data-src`→`src` backfill must stay.
 - **Results must be cached in R2** under `md/<ns>/<target>`, where `<ns>` is `html` (shared by `/html/` and `/r2-html/`, identical output) or `wechat` (`/wechat/`, transform-trimmed output).
