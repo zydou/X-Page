@@ -48,7 +48,7 @@ import { indexHtml } from "./routes/index.js";
 import { handleProxy } from "./routes/proxy.js";
 import { serveVideo } from "./routes/video.js";
 import { serveImage } from "./routes/image.js";
-import { serveHtml } from "./routes/html.js";
+import { serveHtml, serveR2Html } from "./routes/html.js";
 import { serveWechat } from "./routes/wechat.js";
 import { serveGithub } from "./routes/github.js";
 import { serveTweet } from "./routes/tweet.js";
@@ -105,6 +105,11 @@ export default {
     // 传 ctx：Accept: text/markdown 时需要它把转换结果后台写回 R2
     if (cleanPath === "html" || cleanPath.startsWith("html/")) {
       return serveHtml(request, env, ctx);
+    }
+
+    // HTML 抓取 + 改写代理 + R2 持久缓存（HTML 视图先查 R2，miss 才抓取并写回）
+    if (cleanPath === "r2-html" || cleanPath.startsWith("r2-html/")) {
+      return serveR2Html(request, env, ctx);
     }
 
     // 微信公众号文章专用代理（标题可点回原文）

@@ -53,6 +53,7 @@ x-page/
 | `/img/<raw-url>`                        | Image → adaptive HTML (strips `Content-Disposition: attachment`) |
 | `/img/d/<raw-url>`                      | Image → adaptive HTML (direct) |
 | `/html/<raw-url>`                       | HTML fetch + rewrite (custom UA, proxy media, rewrite `<a>` hrefs); `Accept: text/markdown` → markdown |
+| `/r2-html/<raw-url>`                    | Same as `/html/` + R2 persistent cache for the HTML view (`r2html/<target>`, permanent, no refresh); `Accept: text/markdown` → markdown (cached under `md/r2-html/<target>`) |
 | `/wechat/<raw-url>`                     | WeChat article fetch (title links back to original); `Accept: text/markdown` → markdown |
 | `/proxy/<raw-url>`                      | Generic passthrough proxy; rewrites JS/CSS relative URLs |
 | `/github/<user>/<repo>[/<path>]`        | GitHub README or arbitrary file → rendered HTML; directory → file listing (media proxied via `/proxy/`) |
@@ -62,7 +63,7 @@ x-page/
 
 > URL is appended raw — the browser handles necessary encoding automatically. Only encode (`encodeURIComponent`) when the URL contains special characters (`?`, `#`, space, non-ASCII).
 
-Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/wechat/` → `/proxy/` → `/assets/` → `/github/` → tweet (fallback) → 404.
+Route priority in `worker.js`: root → favicon → `/vid/` → `/img/` → `/html/` → `/r2-html/` → `/wechat/` → `/proxy/` → `/assets/` → `/github/` → tweet (fallback) → 404.
 
 ### /html/ rewrite rules
 

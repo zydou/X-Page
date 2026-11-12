@@ -442,3 +442,104 @@ export async function serveHtml(request, env, ctx, transform, prefix = "/html/")
     return new Response(finalHtml, { status: upstream.status, headers });
   }
 }
+
+/**
+ * 处理 /r2-html/<encoded> 请求：与 /html/ 完全相同，外加一层 R2 持久缓存。
+ *
+ * 与 /html/ 的唯一差异：HTML 视图先查 R2（key = `r2html/<原文URL>`），
+ * 命中直接返回；miss 才走 serveHtml 抓取 + 改写，后台把最终 HTML 写回 R2。
+ * 好处与 /wechat/ 一致——原文失效后链接仍可读，且重复访问省一次上游抓取。
+ *
+ * 两条管线分开看：
+ *   - HTML 视图：本函数负责的 R2 缓存（r2html/ 前缀）
+ *   - Markdown 变体：短路给 serveHtml 自带的 serveMarkdown，它有自己的
+ *     `md/r2-html/<target>` R2 key（按前缀隔离），与 HTML 视图互不干扰
+ *
+ * Markdown 协商必须先短路：下面 R2 命中分支会无视 Accept 直接返回缓存 HTML，
+ * 否则一个要 Markdown 的客户端会拿到缓存 HTML。
+ *
+ * 缓存语义（沿用 /wechat/）：
+ *   - R2 是永久真相源，命中不做应用层过期判断
+ *   - 无 refresh 入口：命中即缓存，内容以首次抓取为准（防失效优先）
+ *   - 只缓存 text/html 响应；Markdown 变体与非 HTML 透传（文件下载/纯文本）不进
+ *     r2html/ 前缀
+ *   - 写回不阻塞响应（ctx.waitUntil 后台执行），失败静默忽略
+ *   - 边缘 no-store：R2 已是永久真相源，边缘副本在本账号 purge 不掉
+ *
+ * @param {Request} request 入站请求
+ * @param {Object} env wrangler 注入的环境变量（含 R2 绑定 TWEETS；可空，无绑定则退化为纯代理）
+ * @param {ExecutionContext} ctx Workers 执行上下文，供后台写回 R2
+ * @returns {Response}
+ */
+export async function serveR2Html(request, env, ctx) {
+  const url = new URL(request.url);
+
+  // 提前解出 target，用于算 R2 key（serveHtml 内部会再解析一次）
+  const encoded = url.pathname.slice("/r2-html/".length);
+  if (!encoded) return new Response("missing url", { status: 400 });
+  let target;
+  try {
+    target = decodeURIComponent(encoded);
+  } catch {
+    return new Response("bad encoding", { status: 400 });
+  }
+  if (!/^https?:\/\//i.test(target)) target = "http://" + target;
+
+  // Markdown 协商先短路：交给 serveHtml 的独立管线，它按前缀隔离出自己的
+  // md/r2-html/ R2 key，与下面 HTML 视图的 r2html/ 缓存互不覆盖。
+  if ((request.headers.get("accept") || "").includes("text/markdown")) {
+    return serveHtml(request, env, ctx, null, "/r2-html/");
+  }
+
+  // R2 key：用原文 URL 作唯一标识（R2 key 支持任意 UTF-8 字符串）
+  const r2Key = "r2html/" + target;
+
+  // 第一步：命中 R2 直接返回缓存（原文失效后依然可读）
+  if (env?.TWEETS) {
+    const obj = await env.TWEETS.get(r2Key);
+    if (obj) {
+      try {
+        const html = await obj.text();
+        if (html) {
+          return new Response(html, {
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+              "cache-control": "no-store",
+              "access-control-allow-origin": "*",
+              "vary": "Accept",
+              "x-cache": "hit",
+            },
+          });
+        }
+      } catch {
+        // 损坏的缓存忽略，重新抓取
+      }
+    }
+  }
+
+  // 第二步：R2 miss → 复用 /html/ 的 serveHtml 抓取 + 改写
+  const resp = await serveHtml(request, env, ctx, null, "/r2-html/");
+  if (!resp.ok) return resp;
+
+  // 非 HTML（文件下载 / 纯文本透传）：不缓存、不改头，原样返回
+  const contentType = resp.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) return resp;
+
+  const html = await resp.text();
+
+  // 后台写回 R2（不阻塞响应；失败忽略，下次请求重新抓取）
+  if (env?.TWEETS && ctx) {
+    ctx.waitUntil(
+      env.TWEETS.put(r2Key, html, { httpMetadata: { contentType: "text/html" } }).catch(() => {})
+    );
+  }
+
+  // 边缘 no-store：R2 已是永久真相源，边缘副本在本账号 purge 不掉，
+  // 留着不划算。Vary: Accept 仍带上——同一 URL 也有 text/markdown 变体。
+  const headers = new Headers(resp.headers);
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.set("cache-control", "no-store");
+  headers.set("vary", "Accept");
+  headers.set("x-cache", "miss");
+  return new Response(html, { status: resp.status, headers });
+}
