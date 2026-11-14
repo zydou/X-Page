@@ -45,8 +45,7 @@ https://<your-worker-domain>/{username}/status/{tweet_id}?mode=thread  # 本推 
 
 #### 翻译语言（`?lang=`）
 
-默认用 `TWITTER_LANG` 环境变量作为翻译目标语言（留空则返回原文）。
-`?lang=` 可以在单个链接上覆盖它，**优先级高于环境变量**：
+默认用 `TWITTER_LANG` 环境变量作为翻译目标语言（留空则返回原文）。 `?lang=` 可以在单个链接上覆盖它，**优先级高于环境变量**：
 
 ```txt
 https://<your-worker-domain>/{username}/status/{tweet_id}?lang=ja    # 日文
@@ -138,8 +137,7 @@ https://<your-worker-domain>/github/<user>/<repo>                  # 默认 READ
 https://<your-worker-domain>/github/<user>/<repo>/<path>           # 指定文件或目录
 ```
 
-通过 GitHub Contents API 拉取仓库 README 或 **任意文件**的预渲染 HTML（markdown → HTML + 语法高亮已由 GitHub 完成），图片/视频等媒体经 Worker 内部 `/proxy/` 代理加载，避免直连 GitHub
-的跨域/防盗链问题。
+通过 GitHub Contents API 拉取仓库 README 或 **任意文件**的预渲染 HTML（markdown → HTML + 语法高亮已由 GitHub 完成），图片/视频等媒体经 Worker 内部 `/proxy/` 代理加载，避免直连 GitHub 的跨域/防盗链问题。
 
 - `/github/<user>/<repo>` — 展示仓库默认 README（自动识别 README.md / readme.md / README / README.rst 等格式）
 - `/github/<user>/<repo>/<path>` — 展示指定文件；若路径指向目录，则列出目录下的文件与子目录（可点击进入）
@@ -156,9 +154,7 @@ https://<your-worker-domain>/github/<user>/<repo>/<path>           # 指定文�
 
 #### 配置 GITHUB_TOKEN（可选）
 
-`/github/` 路由只读公共仓库的 README， **不需要任何数据读取权限**。
-GitHub 的限流额度绑定的是 token 代表的用户身份（authenticated = 5000次/h），与 token 本身配置了哪些权限无关。
-所以申请 token 时权限保持空即可，这样即使 token 泄露也读不到任何私有数据，同时仍享受 5000次/h 配额。
+`/github/` 路由只读公共仓库的 README， **不需要任何数据读取权限**。 GitHub 的限流额度绑定的是 token 代表的用户身份（authenticated = 5000次/h），与 token 本身配置了哪些权限无关。所以申请 token 时权限保持空即可，这样即使 token 泄露也读不到任何私有数据，同时仍享受 5000次/h 配额。
 
 步骤：
 
